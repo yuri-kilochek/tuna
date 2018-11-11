@@ -35,8 +35,8 @@ struct virtual_interface
     //void network(boost::asio::network_v6 const& network);
 
     void open(boost::system::error_code& ec) {
-        virtual_interface prototype{get_io_context(),
-                                    ::open("/dev/net/tun", O_RDWR)};
+        boost::asio::posix::stream_descriptor 
+            prototype{get_io_context(), ::open("/dev/net/tun", O_RDWR)};
         if (!prototype.is_open()) {
             ec.assign(errno, boost::system::system_category());
             return;
@@ -46,13 +46,14 @@ struct virtual_interface
         ifr.ifr_flags |= IFF_TUN;
         if (::ioctl(prototype.native_handle(),
                     TUNSETIFF,
-                    static_cast<void*>(ifreq)) == -1)
+                    static_cast<void*>(&ifr)) == -1)
         {
             ec.assign(errno, boost::system::system_category());
             return;
         }
 
-        *this = std::move(prototype);
+        static_cast<boost::asio::posix::stream_descriptor&>(*this) = 
+            std::move(prototype);
         ec.clear();
     }
 

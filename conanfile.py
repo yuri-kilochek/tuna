@@ -28,4 +28,4 @@ class InterfaceptorConan(ConanFile):
         cmake.build()
 
     def package(self):
-        sef.copy('*', 'include', 'include')
+        self.copy('*', 'include', 'include')

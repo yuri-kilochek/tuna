@@ -17,5 +17,12 @@ target_include_directories(interfaceptor INTERFACE
 )
 
 install(TARGETS interfaceptor EXPORT interfaceptor)
-install(EXPORT interfaceptor DESTINATION cmake FILE interfaceptor-config.cmake)
-export(EXPORT interfaceptor FILE interfaceptor-config.cmake)
+install(EXPORT interfaceptor
+    NAMESPACE interfacetor::
+    DESTINATION cmake
+    FILE interfaceptor-config.cmake
+)
+export(EXPORT interfaceptor
+    NAMESPACE interfaceptor::
+    FILE interfaceptor-config.cmake
+)
