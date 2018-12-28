@@ -1,7 +1,7 @@
 from conans import ConanFile, tools, CMake
 
-class InterfaceptorConan(ConanFile):
-    name = 'interfaceptor'
+class TunaConan(ConanFile):
+    name = 'tuna'
     version = tools.load('VERSION').strip()
     requires = (
         'boost/1.68.0@conan/stable',
@@ -26,6 +26,4 @@ class InterfaceptorConan(ConanFile):
             'CMAKE_TOOLCHAIN_FILE': 'conan_paths.cmake'
         })
         cmake.build()
-
-    def package(self):
-        self.copy('*', 'include', 'include')
+        cmake.install()

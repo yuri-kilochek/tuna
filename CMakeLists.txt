@@ -1,28 +1,37 @@
 cmake_minimum_required(VERSION 3.8)
 
-file(STRINGS "VERSION" PROJECT_VERSION)
-project(interfaceptor VERSION "${PROJECT_VERSION}")
+include(GNUInstallDirs)
 
-add_library(interfaceptor INTERFACE)
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
+project(tuna VERSION "${PROJECT_VERSION}")
 
-find_package(Boost REQUIRED)
-target_link_libraries(interfaceptor INTERFACE
+add_library(tuna INTERFACE)
+
+find_package(Boost 1.66 REQUIRED COMPONENTS
+    system
+)
+target_link_libraries(tuna INTERFACE
     Boost::boost
     Boost::system
 )
 
-target_include_directories(interfaceptor INTERFACE
+target_include_directories(tuna INTERFACE
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-    $<INSTALL_INTERFACE:$include>
+    $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>
 )
 
-install(TARGETS interfaceptor EXPORT interfaceptor)
-install(EXPORT interfaceptor
-    NAMESPACE interfacetor::
-    DESTINATION cmake
-    FILE interfaceptor-config.cmake
+install(TARGETS tuna
+    EXPORT tuna
 )
-export(EXPORT interfaceptor
-    NAMESPACE interfaceptor::
-    FILE interfaceptor-config.cmake
+install(DIRECTORY "include/tuna"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+install(EXPORT tuna
+    DESTINATION "${CMAKE_INSTALL_DATADIR}/tuna"
+    NAMESPACE tuna::
+    FILE tuna-config.cmake
+)
+export(EXPORT tuna
+    NAMESPACE tuna::
+    FILE tuna-config.cmake
 )

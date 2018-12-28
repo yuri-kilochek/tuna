@@ -6,7 +6,7 @@ add_executable(example
     main.cpp    
 )
 
-find_package(interfaceptor REQUIRED)
+find_package(tuna REQUIRED)
 target_link_libraries(example PRIVATE
-    interfaceptor::interfaceptor
+    tuna::tuna
 )
