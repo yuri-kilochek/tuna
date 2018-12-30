@@ -30,13 +30,8 @@ struct virtual_device
     void install()
     { install_impl(detail::system_error_thrower()); }
 
-    //template <typename InstallHandler>
-    //auto async_install(InstallHandler&& handler)
-    //{
-    //    boost::system::error_code ec;
-    //    install(ec);
-    //    boost::asio::post(get_io_service(), );
-    //}
+    auto is_installed()
+    { return is_open(); }
 
     void uninstall(boost::system::error_code& ec)
     { close(ec); }

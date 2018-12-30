@@ -12,6 +12,7 @@ int main() {
         std::this_thread::sleep_for(std::chrono::seconds(1));
         std::cout << (1 + i) << std::endl;
     }
+    std::cout << "is_installed:" << vd.is_installed() << std::endl;
     vd.uninstall();
     for (int i = 10; i > 0; --i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
