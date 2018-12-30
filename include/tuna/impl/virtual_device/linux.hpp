@@ -30,6 +30,20 @@ struct virtual_device
     void install()
     { install_impl(detail::system_error_thrower()); }
 
+    //template <typename InstallHandler>
+    //auto async_install(InstallHandler&& handler)
+    //{
+    //    boost::system::error_code ec;
+    //    install(ec);
+    //    boost::asio::post(get_io_service(), );
+    //}
+
+    void uninstall(boost::system::error_code& ec)
+    { close(ec); }
+
+    void uninstall()
+    { close(); }
+
     //boost::asio::ip::network_v4 ip_network_v4() const;
     //void network(boost::asio::ip::network_v4 const& network);
 
@@ -86,6 +100,7 @@ struct virtual_device
     //}
 
 private:
+
     template <typename Failer>
     void install_impl(Failer fail)
     {
