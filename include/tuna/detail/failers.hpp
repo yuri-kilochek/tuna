@@ -1,5 +1,5 @@
-#ifndef TUNA_DETAIL_INCLUDED_DETAIL_ERROR_CODE_SETTER
-#define TUNA_DETAIL_INCLUDED_DETAIL_ERROR_CODE_SETTER
+#ifndef TUNA_DETAIL_INCLUDED_DETAIL_FAILERS
+#define TUNA_DETAIL_INCLUDED_DETAIL_FAILERS
 
 #include <boost/predef/os.h>
 #include <boost/system/error_code.hpp>

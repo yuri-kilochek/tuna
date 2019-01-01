@@ -2,6 +2,7 @@
 #define TUNA_DETAIL_INCLUDED_IMPL_VIRTUAL_DEVICE_LINUX
 
 #include <tuna/detail/failers.hpp>
+#include <tuna/detail/basic_async_op.hpp>
 
 #include <boost/system/error_code.hpp>
 #include <boost/asio/io_context.hpp>
@@ -11,6 +12,8 @@
 //#include <boost/asio/ip/network_v4.hpp>
 //#include <boost/asio/ip/network_v6.hpp>
 //#include <boost/asio/ip/udp.hpp>
+
+#include <utility>
 
 #include <fcntl.h>
 #include <linux/if.h>
@@ -57,44 +60,21 @@ struct virtual_device
     {
         using handler_type = typename Completion::completion_handler_type;
 
-        using allocator_type = 
-            boost::asio::associated_allocator_t<handler_type,
-                boost::asio::associated_allocator_t<virtual_device>>;
-
-        using executor_type =
-            boost::asio::associated_executor_t<handler_type,
-                boost::asio::associated_executor_t<virtual_device>>;
-
         struct install_op
+        : detail::basic_async_op<virtual_device, handler_type>
         {
-            virtual_device& virtual_device_;
-            handler_type handler_;
-
-            auto get_allocator()
-            const noexcept
-            -> allocator_type
-            { return boost::asio::get_associated_allocator(handler_,
-                boost::asio::get_associated_allocator(virtual_device_)); }
-
-            auto get_executor()
-            const noexcept
-            -> executor_type
-            { return boost::asio::get_associated_executor(handler_,
-                boost::asio::get_associated_executor(virtual_device_)); }
+            using install_op::basic_async_op::basic_async_op;
 
             void operator()()
             {
                 boost::system::error_code ec;
-                virtual_device_.install(ec);
-                handler_(ec);
+                this->io_object_.install(ec);
+                this->handler_(ec);
             }
         };
 
         Completion completion(handler);
-
-        boost::asio::post(install_op{
-            *this, std::move(completion.completion_handler)});
-
+        boost::asio::post(install_op(*this, completion.completion_handler));
         return completion.result.get();
     }
 
