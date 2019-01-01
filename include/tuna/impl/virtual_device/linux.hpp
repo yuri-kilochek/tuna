@@ -6,6 +6,8 @@
 #include <boost/system/error_code.hpp>
 #include <boost/asio/io_context.hpp>
 #include <boost/asio/posix/stream_descriptor.hpp>
+#include <boost/asio/async_result.hpp>
+#include <boost/asio/post.hpp>
 //#include <boost/asio/ip/network_v4.hpp>
 //#include <boost/asio/ip/network_v6.hpp>
 //#include <boost/asio/ip/udp.hpp>
@@ -20,9 +22,26 @@ namespace tuna {
 struct virtual_device
 : private boost::asio::posix::stream_descriptor
 {
+    using stream_descriptor::executor_type;
+
+    auto get_executor()
+    const noexcept
+    -> executor_type
+    {
+        // stream_descriptor::get_ececutor is not const, which is likely an
+        // asio bug, see https://github.com/boostorg/asio/issues/185
+        // This is a workaround. Replace with simple using when fixed.
+        return const_cast<virtual_device&>(*this)
+            .stream_descriptor::get_executor();
+    }
+
     explicit virtual_device(boost::asio::io_context& io_context)
-    : boost::asio::posix::stream_descriptor(io_context)
+    : stream_descriptor(io_context)
     {}
+
+    auto is_installed()
+    -> bool
+    { return is_open(); }
 
     void install(boost::system::error_code& ec)
     { install_impl(detail::error_code_setter(ec)); }
@@ -30,8 +49,54 @@ struct virtual_device
     void install()
     { install_impl(detail::system_error_thrower()); }
 
-    auto is_installed()
-    { return is_open(); }
+    template <typename InstallHandler,
+              typename Completion = boost::asio::async_completion<
+                  InstallHandler, void(boost::system::error_code)>>
+    auto async_install(InstallHandler&& handler)
+    -> typename decltype(std::declval<Completion>().result)::return_type
+    {
+        using handler_type = typename Completion::completion_handler_type;
+
+        using allocator_type = 
+            boost::asio::associated_allocator_t<handler_type,
+                boost::asio::associated_allocator_t<virtual_device>>;
+
+        using executor_type =
+            boost::asio::associated_executor_t<handler_type,
+                boost::asio::associated_executor_t<virtual_device>>;
+
+        struct install_op
+        {
+            virtual_device& virtual_device_;
+            handler_type handler_;
+
+            auto get_allocator()
+            const noexcept
+            -> allocator_type
+            { return boost::asio::get_associated_allocator(handler_,
+                boost::asio::get_associated_allocator(virtual_device_)); }
+
+            auto get_executor()
+            const noexcept
+            -> executor_type
+            { return boost::asio::get_associated_executor(handler_,
+                boost::asio::get_associated_executor(virtual_device_)); }
+
+            void operator()()
+            {
+                boost::system::error_code ec;
+                virtual_device_.install(ec);
+                handler_(ec);
+            }
+        };
+
+        Completion completion(handler);
+
+        boost::asio::post(install_op{
+            *this, std::move(completion.completion_handler)});
+
+        return completion.result.get();
+    }
 
     void uninstall(boost::system::error_code& ec)
     { close(ec); }
@@ -99,22 +164,19 @@ private:
     template <typename Failer>
     void install_impl(Failer fail)
     {
-        {
-            int fd = ::open("/dev/net/tun", O_RDWR);
-            if (fd == -1) {
-                fail();
-                return;
-            }
-            assign(fd);
+        int fd = ::open("/dev/net/tun", O_RDWR);
+        if (fd == -1) {
+            fail();
+            return;
         }
+        assign(fd);
 
+        ::ifreq ifr = {};
+        ifr.ifr_flags = IFF_TUN;
+        if (::ioctl(fd, TUNSETIFF, (char*)&ifr) == -1)
         {
-            ::ifreq ifr = {};
-            ifr.ifr_flags = IFF_TUN;
-            if (::ioctl(native_handle(), TUNSETIFF, (char*)&ifr) == -1) {
-                fail();
-                return;
-            }
+            fail();
+            return;
         }
     }
 };
