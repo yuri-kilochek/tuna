@@ -1,10 +1,22 @@
 #ifndef TUNA_DETAIL_INCLUDED_DETAIL_IMPL_VIRTUAL_DEVICE_BASE_LINUX
 #define TUNA_DETAIL_INCLUDED_DETAIL_IMPL_VIRTUAL_DEVICE_BASE_LINUX
 
-#include <boost/asio/posix/stream_descriptor.hpp>
-#include <boost/system/error_code.hpp>
+#include <tuna/detail/complete_op.hpp>
 
-namespace tuna::detail {
+#include <boost/scope_exit.hpp>
+#include <boost/system/error_code.hpp>
+#include <boost/asio/posix/stream_descriptor.hpp>
+#include <boost/asio/post.hpp>
+
+#include <cerrno>
+
+#include <fcntl.h>
+#include <unistd.h>
+#include <linux/if.h>
+#include <linux/if_tun.h>
+
+namespace tuna {
+namespace detail {
 ///////////////////////////////////////////////////////////////////////////////
 
 struct virtual_device_base
@@ -17,58 +29,81 @@ struct virtual_device_base
     -> bool
     { return is_open(); }
 
-    void install(boost::system::error_code& error_code)
+    void install(boost::system::error_code& ec)
     {
-        // TODO
+        if (is_installed()) {
+            ec.clear();
+            return;
+        }
+
+        int fd = ::open("/dev/net/tun", O_RDWR);
+        if (fd == -1) {
+            ec.assign(errno, boost::system::system_category());
+            return;
+        }
+        BOOST_SCOPE_EXIT_ALL(&) {
+            if (fd == -1) { return; }
+            ::close(fd);
+        };
+
+        ::ifreq ifr = {};
+        ifr.ifr_flags = IFF_TUN;
+        if (::ioctl(fd, TUNSETIFF, reinterpret_cast<char*>(&ifr)) == -1) {
+            ec.assign(errno, boost::system::system_category());
+            return;
+        }
+
+        // TODO: >=C++14: replace with std::exchange
+        assign(fd); fd = -1;
     }
 
-    template <typename InstallHandler>
-    void async_install(InstallHandler&& handler)
+    template <typename Handler>
+    void async_install(Handler&& handler)
     {
-        
+        boost::system::error_code ec;
+        if (!is_installed()) { install(ec); }
+        boost::asio::post(detail::make_complete_op(
+            *this, std::forward<Handler>(handler), ec));
     }
 
-    void uninstall(boost::system::error_code& error_code)
-    {
-        // TODO
-    }
+    void uninstall(boost::system::error_code& ec)
+    { close(ec); }
 
-    template <typename InstallHandler>
-    void async_uninstall(InstallHandler&& handler)
+    template <typename Handler>
+    void async_uninstall(Handler&& handler)
     {
-        
+        boost::system::error_code ec;
+        close(ec);
+        boost::asio::post(detail::make_complete_op(
+            *this, std::forward<Handler>(handler), ec));
     }
 
 
     auto is_active()
     const
     -> bool
-    { return false; }
-
-    void activate(boost::system::error_code& error_code)
-    {
+    { 
         // TODO
+        return false;
     }
 
-    template <typename InstallHandler>
-    void async_activate(InstallHandler&& handler)
-    {
-        
-    }
+    void activate(boost::system::error_code& ec)
+    { /* TODO */ }
 
-    void deactivate(boost::system::error_code& error_code)
-    {
-        // TODO
-    }
+    template <typename Handler>
+    void async_activate(Handler&& handler)
+    { /* TODO */ }
 
-    template <typename InstallHandler>
-    void async_deactivate(InstallHandler&& handler)
-    {
-        
-    }
+    void deactivate(boost::system::error_code& ec)
+    { /* TODO */ }
+
+    template <typename Handler>
+    void async_deactivate(Handler&& handler)
+    { /* TODO */ }
 };
 
 ///////////////////////////////////////////////////////////////////////////////
-}
+} // namespace detail
+} // namespace tuna
 
 #endif
