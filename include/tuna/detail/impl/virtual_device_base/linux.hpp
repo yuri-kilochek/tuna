@@ -8,6 +8,7 @@
 #include <boost/asio/posix/stream_descriptor.hpp>
 #include <boost/asio/post.hpp>
 
+#include <utility>
 #include <cerrno>
 
 #include <fcntl.h>
@@ -53,8 +54,8 @@ struct virtual_device_base
             return;
         }
 
-        // TODO: >=C++14: replace with std::exchange
-        assign(fd); fd = -1;
+        assign(fd);
+        fd = -1;
     }
 
     template <typename Handler>
