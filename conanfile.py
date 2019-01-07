@@ -3,15 +3,14 @@ from conans import ConanFile, tools, CMake
 class TunaConan(ConanFile):
     name = 'tuna'
     version = tools.load('VERSION').strip()
-    requires = (
-        'boost/1.68.0@conan/stable',
-    )
     exports = (
         'VERSION',
     )
     exports_sources = (
         'CMakeLists.txt',
+        'cmake/*',
         'include/*',
+        'src/*',
     )
     generators = (
         'cmake_find_package',

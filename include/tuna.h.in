@@ -1,0 +1,167 @@
+#ifndef TUNA_PRIV_INCLUDED
+#define TUNA_PRIV_INCLUDED
+
+///////////////////////////////////////////////////////////////////////////////
+
+#include <stddef.h>
+
+///////////////////////////////////////////////////////////////////////////////
+
+#if defined(linux) \
+ || defined(__linux) \
+ || defined(__linux__) \
+ || defined(__gnu_linux__)
+    #define TUNA_PRIV_OS_LINUX 1
+#endif
+
+#if defined(_WIN32) \
+ || defined(_WIN64) \
+ || defined(__WIN32__) \
+ || defined(__TOS_WIN__) \
+ || defined(__WINDOWS__)
+    #define TUNA_PRIV_OS_WINDOWS 1
+#endif
+
+///////////////////////////////////////////////////////////////////////////////
+
+#if __cplusplus
+    #define TUNA_PRIV_LINKAGE extern "C"
+#else
+    #define TUNA_PRIV_LINKAGE extern
+#endif
+
+#if defined(TUNA_IMPORT) && defined(TUNA_EXPORT)
+    #error "TUNA_IMPORT and TUNA_EXPORT must not defined simultaneously."
+#endif
+#if TUNA_PRIV_OS_WINDOWS
+    #if defined(TUNA_IMPORT)
+        #define TUNA_PRIV_VISIBILITY __declspec(dllimport)
+    #elif defined(TUNA_EXPORT)
+        #define TUNA_PRIV_VISIBILITY __declspec(dllexport)
+    #else
+        #define TUNA_PRIV_VISIBILITY 
+    #endif
+#else
+    #if defined(TUNA_IMPORT) || defined(TUNA_EXPORT)
+        #define TUNA_PRIV_VISIBILITY __attribute__(visibility("default"))
+    #else
+        #define TUNA_PRIV_VISIBILITY 
+    #endif
+#endif
+
+#define TUNA_PRIV_API TUNA_PRIV_LINKAGE TUNA_PRIV_VISIBILITY
+
+///////////////////////////////////////////////////////////////////////////////
+
+typedef unsigned long tuna_version_t;
+
+#define TUNA_COMPOSE_VERSION(major, minor, patch) \
+    ((major) << 20uL) | ((minor) << 10uL) | ((patch) | 0uL)
+
+#define TUNA_GET_MAJOR_VERSION(version) ((version) >> 20uL)
+#define TUNA_GET_MINOR_VERSION(version) ((version) >> 10uL & 0x3FFuL)
+#define TUNA_GET_PATCH_VERSION(version) ((version) & 0x3FFuL)
+
+#define TUNA_HEADER_VERSION \
+    TUNA_COMPOSE_VERSION(${VERSION_MAJOR}, ${VERSION_MINOR}, ${VERSION_PATCH})
+
+TUNA_PRIV_API
+tuna_version_t
+tuna_get_actual_version(void);
+
+///////////////////////////////////////////////////////////////////////////////
+
+#define TUNA_PRIV_ENUMERATE_ERRORS(yield) \
+    yield(NAME_TOO_LONG, name_too_long) \
+    yield(INVALID_ADDRESS, invalid_address) \
+/**/
+
+typedef enum {
+    TUNA_PRIV_NO_ERROR,
+
+    #define TUNA_PRIV_DECLARE_ERROR(upper_name, lower_name) \
+        TUNA_##upper_name,
+    /**/
+    TUNA_PRIV_ENUMERATE_ERRORS(TUNA_PRIV_DECLARE_ERROR)
+    #undef TUNA_PRIV_DECLARE_ERROR
+} tuna_error_t;
+
+TUNA_PRIV_API
+char const*
+tuna_get_error_name(tuna_error_t error);
+
+///////////////////////////////////////////////////////////////////////////////
+
+#if TUNA_PRIV_OS_WINDOWS
+    typedef void *tuna_native_handle_t;
+#else
+    typedef int tuna_native_handle_t;
+#endif
+
+typedef struct {
+    tuna_native_handle_t priv_native_handle;
+} tuna_device_t;
+
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_create(tuna_device_t *device);
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_destroy(tuna_device_t *device);
+
+
+TUNA_PRIV_API inline
+tuna_native_handle_t
+tuna_get_native_handle(tuna_device_t const *device) {
+    return device->priv_native_handle;
+}
+
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_is_running(tuna_device_t const *device, int *is_running);
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_set_running(tuna_device_t const *device, int want_running);
+
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_get_name(tuna_device_t const *device, char *name, size_t *name_length);
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_set_name(tuna_device_t *device, char const *name, size_t *name_length);
+
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_get_ip4_address(tuna_device_t const *device,
+                     unsigned char octets[4],
+                     unsigned char *prefix_length);
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_set_ip4_address(tuna_device_t *device,
+                     unsigned char const octets[4],
+                     unsigned char prefix_length);
+
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_get_ip6_address(tuna_device_t const *device,
+                     unsigned short hextets[4],
+                     unsigned char *prefix_length);
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_set_ip6_address(tuna_device_t *device,
+                     unsigned short const hextets[4],
+                     unsigned char prefix_length);
+
+///////////////////////////////////////////////////////////////////////////////
+
+#endif
