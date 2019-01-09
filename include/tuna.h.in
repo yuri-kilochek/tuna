@@ -73,7 +73,7 @@ tuna_get_actual_version(void);
 
 #define TUNA_PRIV_ENUMERATE_ERRORS(yield) \
     yield(NAME_TOO_LONG, name_too_long) \
-    yield(INVALID_ADDRESS, invalid_address) \
+    yield(ADDRESS_NOT_SET, address_not_set) \
 /**/
 
 typedef enum {
@@ -121,15 +121,6 @@ tuna_get_native_handle(tuna_device_t const *device) {
 
 TUNA_PRIV_API
 tuna_error_t
-tuna_is_running(tuna_device_t const *device, int *is_running);
-
-TUNA_PRIV_API
-tuna_error_t
-tuna_set_running(tuna_device_t const *device, int want_running);
-
-
-TUNA_PRIV_API
-tuna_error_t
 tuna_get_name(tuna_device_t const *device, char *name, size_t *name_length);
 
 TUNA_PRIV_API
@@ -153,14 +144,23 @@ tuna_set_ip4_address(tuna_device_t *device,
 TUNA_PRIV_API
 tuna_error_t
 tuna_get_ip6_address(tuna_device_t const *device,
-                     unsigned short hextets[4],
+                     unsigned short hextets[8],
                      unsigned char *prefix_length);
 
 TUNA_PRIV_API
 tuna_error_t
 tuna_set_ip6_address(tuna_device_t *device,
-                     unsigned short const hextets[4],
+                     unsigned short const hextets[8],
                      unsigned char prefix_length);
+
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_is_running(tuna_device_t const *device, int *is_running);
+
+TUNA_PRIV_API
+tuna_error_t
+tuna_set_running(tuna_device_t const *device, int want_running);
 
 ///////////////////////////////////////////////////////////////////////////////
 
