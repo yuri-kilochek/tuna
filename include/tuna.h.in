@@ -100,12 +100,14 @@ tuna_get_error_name(tuna_error_t error);
 
 #if TUNA_PRIV_OS_WINDOWS
     typedef void *tuna_native_handle_t;
+    #define TUNA_PRIV_NATIVE_HANDLE_NAME priv_handle
 #else
     typedef int tuna_native_handle_t;
+    #define TUNA_PRIV_NATIVE_HANDLE_NAME priv_fd
 #endif
 
 typedef struct {
-    tuna_native_handle_t priv_native_handle;
+    tuna_native_handle_t TUNA_PRIV_NATIVE_HANDLE_NAME;
 } tuna_device_t;
 
 
@@ -121,7 +123,7 @@ tuna_destroy(tuna_device_t *device);
 static inline
 tuna_native_handle_t
 tuna_get_native_handle(tuna_device_t const *device) {
-    return device->priv_native_handle;
+    return device->TUNA_PRIV_NATIVE_HANDLE_NAME;
 }
 
 
