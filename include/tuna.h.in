@@ -108,6 +108,9 @@ tuna_get_error_name(tuna_error_t error);
 
 typedef struct {
     tuna_native_handle_t TUNA_PRIV_NATIVE_HANDLE_NAME;
+    #if TUNA_PRIV_OS_LINUX
+        int priv_ifindex;
+    #endif
 } tuna_device_t;
 
 
