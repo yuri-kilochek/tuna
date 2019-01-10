@@ -26,7 +26,7 @@ tuna_create(tuna_device_t *device) {
         return TUNA_UNEXPECTED;
     }
 
-    struct ifreq ifr = {.ifr_flags = IFF_TUN};
+    struct ifreq ifr = {.ifr_flags = IFF_TUN | IFF_NO_PI};
     if (ioctl(fd, TUNSETIFF, &ifr) == -1) {
         close(fd);
         switch (errno) {
