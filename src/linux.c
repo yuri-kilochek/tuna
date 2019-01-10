@@ -3,12 +3,14 @@
 #if TUNA_PRIV_OS_LINUX
 ///////////////////////////////////////////////////////////////////////////////
 
+#include <errno.h>
+
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
 
-TUNA_PRIV_API
 tuna_error_t
 tuna_create(tuna_device_t *device) {
     int fd = open("/dev/net/tun", O_RDWR);
@@ -38,10 +40,9 @@ tuna_create(tuna_device_t *device) {
     return 0;
 }
 
-TUNA_PRIV_API
 tuna_error_t
 tuna_destroy(tuna_device_t *device) {
-    if (close(tuna->priv_native_handle) == -1) {
+    if (close(device->priv_native_handle) == -1) {
         return TUNA_UNEXPECTED;
     }
     return 0;

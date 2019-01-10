@@ -8,6 +8,7 @@ project(tuna VERSION ${PROJECT_VERSION})
 add_library(tuna
     "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
     src/generic.c
+    src/linux.c
 )
 
 add_custom_command(

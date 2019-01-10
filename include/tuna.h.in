@@ -118,7 +118,7 @@ tuna_error_t
 tuna_destroy(tuna_device_t *device);
 
 
-TUNA_PRIV_API inline
+static inline
 tuna_native_handle_t
 tuna_get_native_handle(tuna_device_t const *device) {
     return device->priv_native_handle;

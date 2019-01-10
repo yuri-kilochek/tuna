@@ -2,7 +2,6 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-TUNA_PRIV_API
 tuna_version_t
 tuna_get_actual_version(void) {
     return TUNA_HEADER_VERSION;
@@ -10,7 +9,6 @@ tuna_get_actual_version(void) {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-TUNA_PRIV_API
 char const*
 tuna_get_error_name(tuna_error_t error) {
     switch (error) {
@@ -26,9 +24,3 @@ tuna_get_error_name(tuna_error_t error) {
     }
     return NULL;
 }
-
-///////////////////////////////////////////////////////////////////////////////
-
-TUNA_PRIV_API inline
-tuna_native_handle_t
-tuna_get_native_handle(tuna_device_t const *device);

@@ -7,8 +7,13 @@ add_executable(example
 )
 
 set_target_properties(example PROPERTIES
-    CXX_STANDARD 11
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
+)
+
+find_package(Boost REQUIRED)
+target_link_libraries(example PRIVATE
+    Boost::boost
 )
 
 find_package(tuna REQUIRED)
