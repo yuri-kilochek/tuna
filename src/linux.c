@@ -75,9 +75,9 @@ tuna_destroy(tuna_device_t *device) {
 
 
 tuna_error_t
-tuna_get_name(tuna_device_t const *device, char *name, size_t *name_length) {
-    char tmp[IF_NAMESIZE];
-    if (if_indextoname(device->priv_ifindex, tmp) == NULL) {
+tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
+    char local_name[IF_NAMESIZE];
+    if (if_indextoname(device->priv_ifindex, local_name) == NULL) {
         switch (errno) {
           case ENOMEM:
           case ENOBUFS:
@@ -89,16 +89,15 @@ tuna_get_name(tuna_device_t const *device, char *name, size_t *name_length) {
         }
         return TUNA_UNEXPECTED;
     }
-    size_t tmp_length = strnlen(tmp, IF_NAMESIZE);
-
-    if (name) {
-        size_t n = (tmp_length < *name_length) ? tmp_size : *name_size;
-        strncpy(name, tmp, copy_size);
-        if (copy_size < *name_size) { name[copy_size] = '\0'; }
-        *name_size = copy_size;
-        return 0;
+    size_t local_length = strnlen(local_name, IF_NAMESIZE);
+    if (*length > local_length) { *length = local_length; }
+    memcpy(name, local_name, *length);
+    name[*length] = '\0';
+    if (*length < local_length) {
+        *length = local_length;
+        return TUNA_NAME_TOO_LONG;
     }
-
+    return 0;
 }
 
 ///////////////////////////////////////////////////////////////////////////////

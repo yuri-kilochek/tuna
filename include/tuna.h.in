@@ -132,11 +132,11 @@ tuna_get_native_handle(tuna_device_t const *device) {
 
 TUNA_PRIV_API
 tuna_error_t
-tuna_get_name(tuna_device_t const *device, char *name, size_t *name_length);
+tuna_get_name(tuna_device_t const *device, char *name, size_t *length);
 
 TUNA_PRIV_API
 tuna_error_t
-tuna_set_name(tuna_device_t *device, char const *name, size_t *name_length);
+tuna_set_name(tuna_device_t *device, char const *name, size_t *length);
 
 
 TUNA_PRIV_API
