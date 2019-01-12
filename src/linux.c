@@ -170,6 +170,8 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
         switch (errno) {
           case ENODEV:;
             goto start;
+          case EPERM:;
+            return TUNA_OPERATION_NOT_PERMITTED;
         }
         return TUNA_UNEXPECTED;
     }
