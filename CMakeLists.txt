@@ -11,15 +11,25 @@ add_library(tuna
     src/linux.c
 )
 
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(tuna 
+        PRIVATE TUNA_EXPORT
+        INTERFACE TUNA_IMPORT
+    )
+    set_target_properties(tuna PROPERTIES
+        C_VISIBILITY_PRESET hidden
+    )
+endif()
+
 add_custom_command(
     OUTPUT include/tuna.h
     MAIN_DEPENDENCY include/tuna.h.in
     COMMAND "${CMAKE_COMMAND}"
         -D INPUT="${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in" 
         -D OUTPUT="${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h" 
-        -D VERSION_MAJOR="${PROJECT_VERSION_MAJOR}" 
-        -D VERSION_MINOR="${PROJECT_VERSION_MINOR}" 
-        -D VERSION_PATCH="${PROJECT_VERSION_PATCH}" 
+        -D MAJOR_VERSION="${PROJECT_VERSION_MAJOR}" 
+        -D MINOR_VERSION="${PROJECT_VERSION_MINOR}" 
+        -D PATCH_VERSION="${PROJECT_VERSION_PATCH}" 
         -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/configure_file.cmake"
 )
 
@@ -36,7 +46,7 @@ install(TARGETS tuna
     EXPORT tuna
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
-    RUNTIME DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+    RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
 )
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"

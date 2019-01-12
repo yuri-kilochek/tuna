@@ -4,6 +4,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #include <stddef.h>
+#include <stdint.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -24,46 +25,45 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if __cplusplus
-    #define TUNA_PRIV_LINKAGE extern "C"
-#else
-    #define TUNA_PRIV_LINKAGE extern
-#endif
-
 #if defined(TUNA_IMPORT) && defined(TUNA_EXPORT)
-    #error "TUNA_IMPORT and TUNA_EXPORT must not defined simultaneously."
+    #error "TUNA_IMPORT and TUNA_EXPORT must not be defined simultaneously."
 #endif
 #if TUNA_PRIV_OS_WINDOWS
     #if defined(TUNA_IMPORT)
-        #define TUNA_PRIV_VISIBILITY __declspec(dllimport)
+        #define TUNA_PRIV_API __declspec(dllimport)
     #elif defined(TUNA_EXPORT)
-        #define TUNA_PRIV_VISIBILITY __declspec(dllexport)
+        #define TUNA_PRIV_API __declspec(dllexport)
     #else
-        #define TUNA_PRIV_VISIBILITY 
+        #define TUNA_PRIV_API 
     #endif
 #else
-    #if defined(TUNA_IMPORT) || defined(TUNA_EXPORT)
-        #define TUNA_PRIV_VISIBILITY __attribute__(visibility("default"))
+    #if defined(TUNA_EXPORT)
+        #define TUNA_PRIV_API __attribute__((visibility("default")))
     #else
-        #define TUNA_PRIV_VISIBILITY 
+        #define TUNA_PRIV_API 
     #endif
 #endif
 
-#define TUNA_PRIV_API TUNA_PRIV_LINKAGE TUNA_PRIV_VISIBILITY
-
+///////////////////////////////////////////////////////////////////////////////
+#if __cplusplus
+extern "C" {
+#endif
 ///////////////////////////////////////////////////////////////////////////////
 
-typedef unsigned long tuna_version_t;
+typedef uint_least32_t tuna_version_t;
 
 #define TUNA_COMPOSE_VERSION(major, minor, patch) \
-    ((major) << 20uL) | ((minor) << 10uL) | ((patch) | 0uL)
+    ((major) << UINT32_C(20) | (minor) << UINT32_C(10) | (patch))
 
-#define TUNA_GET_MAJOR_VERSION(version) ((version) >> 20uL)
-#define TUNA_GET_MINOR_VERSION(version) ((version) >> 10uL & 0x3FFuL)
-#define TUNA_GET_PATCH_VERSION(version) ((version) & 0x3FFuL)
+#define TUNA_GET_MAJOR_VERSION(version) \
+    ((version) >> UINT32_C(20))
+#define TUNA_GET_MINOR_VERSION(version) \
+    ((version) >> UINT32_C(10) & UINT32_C(0x3FF))
+#define TUNA_GET_PATCH_VERSION(version) \
+    ((version) & UINT32_C(0x3FF))
 
 #define TUNA_HEADER_VERSION \
-    TUNA_COMPOSE_VERSION(${VERSION_MAJOR}, ${VERSION_MINOR}, ${VERSION_PATCH})
+    TUNA_COMPOSE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION})
 
 TUNA_PRIV_API
 tuna_version_t
@@ -77,9 +77,7 @@ tuna_get_actual_version(void);
     yield(OPERATION_NOT_PERMITTED        , operation_not_permitted        ) \
     yield(TOO_MANY_HANDLES_OPEN          , too_many_handles_open          ) \
     yield(TOO_MANY_HANDLES_OPEN_IN_SYSTEM, too_many_handles_open_in_system) \
-    \
     yield(NAME_TOO_LONG                  , name_too_long                  ) \
-    yield(ADDRESS_NOT_SET                , address_not_set                ) \
 /**/
 
 typedef enum {
@@ -142,37 +140,46 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length);
 TUNA_PRIV_API
 tuna_error_t
 tuna_get_ip4_address(tuna_device_t const *device,
-                     unsigned char octets[4],
-                     unsigned char *prefix_length);
+                     uint_least8_t octets[4],
+                     uint_least8_t *prefix_length);
 
 TUNA_PRIV_API
 tuna_error_t
 tuna_set_ip4_address(tuna_device_t *device,
-                     unsigned char const octets[4],
-                     unsigned char prefix_length);
+                     uint_least8_t const octets[4],
+                     uint_least8_t prefix_length);
 
 
 TUNA_PRIV_API
 tuna_error_t
 tuna_get_ip6_address(tuna_device_t const *device,
-                     unsigned short hextets[8],
-                     unsigned char *prefix_length);
+                     uint_least16_t hextets[8],
+                     uint_least8_t *prefix_length);
 
 TUNA_PRIV_API
 tuna_error_t
 tuna_set_ip6_address(tuna_device_t *device,
-                     unsigned short const hextets[8],
-                     unsigned char prefix_length);
+                     uint_least16_t const hextets[8],
+                     uint_least8_t prefix_length);
 
+
+typedef enum {
+    TUNA_DOWN,
+    TUNA_UP,
+} tuna_status_t;
 
 TUNA_PRIV_API
 tuna_error_t
-tuna_is_running(tuna_device_t const *device, int *is_running);
+tuna_get_status(tuna_device_t const *device, tuna_status_t *status);
 
 TUNA_PRIV_API
 tuna_error_t
-tuna_set_running(tuna_device_t const *device, int want_running);
+tuna_set_status(tuna_device_t const *device, tuna_status_t status);
 
+///////////////////////////////////////////////////////////////////////////////
+#if __cplusplus
+} // extern "C"
+#endif
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

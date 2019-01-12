@@ -3,7 +3,18 @@ from conans import ConanFile, tools, CMake
 class TunaConan(ConanFile):
     name = 'tuna'
     version = tools.load('VERSION').strip()
-    settings = 'os', 'compiler', 'build_type', 'arch'
+    settings = (
+        'os',
+        'compiler',
+        'build_type',
+        'arch',
+    )
+    options = {
+        'shared': [False, True],
+    }
+    default_options = {
+        'shared': False,        
+    }
     exports = (
         'VERSION',
     )
@@ -30,4 +41,5 @@ class TunaConan(ConanFile):
 
     def package_info(self):
         self.cpp_info.libs = tools.collect_libs(self)
-
+        if self.options.shared:
+            self.cpp_info.defines.append('TUNA_IMPORT')
