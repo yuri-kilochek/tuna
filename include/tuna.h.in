@@ -83,9 +83,7 @@ tuna_get_actual_version(void);
 typedef enum {
     TUNA_PRIV_NO_ERROR,
 
-    #define TUNA_PRIV_DECLARE_ERROR(upper_name, lower_name) \
-        TUNA_##upper_name,
-    /**/
+    #define TUNA_PRIV_DECLARE_ERROR(upper_name, lower_name) TUNA_##upper_name,
     TUNA_PRIV_ENUMERATE_ERRORS(TUNA_PRIV_DECLARE_ERROR)
     #undef TUNA_PRIV_DECLARE_ERROR
 } tuna_error_t;
@@ -108,6 +106,7 @@ typedef struct {
     tuna_native_handle_t TUNA_PRIV_NATIVE_HANDLE_NAME;
     #if TUNA_PRIV_OS_LINUX
         int priv_ifindex;
+        int priv_rtnl_sockfd;
     #endif
 } tuna_device_t;
 
@@ -164,8 +163,8 @@ tuna_set_ip6_address(tuna_device_t *device,
 
 
 typedef enum {
-    TUNA_DOWN,
-    TUNA_UP,
+    TUNA_DISCONNECTED,
+    TUNA_CONNECTED,
 } tuna_status_t;
 
 TUNA_PRIV_API
