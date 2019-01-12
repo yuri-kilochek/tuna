@@ -1,5 +1,7 @@
 #include <tuna.h>
 
+#include <cerrno>
+
 #include <boost/scope_exit.hpp>
 
 #include <thread>
@@ -11,7 +13,8 @@ int main() {
       case 0:
         break;
       default:
-        std::cerr << "tuna_create failed: " << tuna_get_error_name(e) << "\n";
+        std::cerr << "tuna_create failed: " << tuna_get_error_name(e)
+                  << " : " << errno << " " << strerror(errno) <<"\n";
         return EXIT_FAILURE;
     }
     BOOST_SCOPE_EXIT_ALL(&) {
@@ -19,7 +22,8 @@ int main() {
           case 0:
             break;
           default:
-            std::cerr << "tuna_destroy failed: " << tuna_get_error_name(e) << "\n";
+            std::cerr << "tuna_destroy failed: " << tuna_get_error_name(e)
+                      << " : " << errno << " " << strerror(errno) <<"\n";
             break;
         }
     };
@@ -36,7 +40,8 @@ int main() {
             if (!e) { break; }
             goto retry_get_name;
           default:
-            std::cerr << "tuna_get_name failed: " << tuna_get_error_name(e) << "\n";
+            std::cerr << "tuna_get_name failed: " << tuna_get_error_name(e)
+                      << " : " << errno << " " << strerror(errno) <<"\n";
             return EXIT_FAILURE;
         }
     }
@@ -45,12 +50,13 @@ int main() {
     for (int i = 0; i < 1000; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        tuna_status_t status;
-        switch (auto e = tuna_get_status(&device, &status); e) {
+        tuna_status_t status = (i % 2) ? TUNA_CONNECTED : TUNA_DISCONNECTED;
+        switch (auto e = tuna_set_status(&device, status); e) {
           case 0:
             break;
           default:
-            std::cerr << "tuna_get_status failed: " << tuna_get_error_name(e) << "\n";
+            std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
+                      << " : " << errno << " " << strerror(errno) <<"\n";
             return EXIT_FAILURE;
         }
 

@@ -144,29 +144,37 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
     return 0;
 }
 
-//tuna_error_t
-//tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
-//    if (ioctl(rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
-//        TUNA_FREEZE_ERRNO {
-//            close(rtnl_sockfd);
-//            close(fd);
-//        }
-//        return TUNA_UNEXPECTED;
-//    }
-//    ifr.ifr_flags |= IFF_UP;
-//    ifr.ifr_flags &= ~IFF_LOWER_UP;
-//    if (ioctl(rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
-//        TUNA_FREEZE_ERRNO {
-//            close(rtnl_sockfd);
-//            close(fd);
-//        }
-//        switch (errno) {
-//          case EPERM:
-//            return TUNA_OPERATION_NOT_PERMITTED;
-//        }
-//        return TUNA_UNEXPECTED;
-//    }
-//}
+tuna_error_t
+tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
+  start:;
+    struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
+    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
+        return TUNA_UNEXPECTED;
+    }
+    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
+        switch (errno) {
+          case ENODEV:;
+            goto start;
+        }
+        return TUNA_UNEXPECTED;
+    }
+    switch (status) {
+      case TUNA_DISCONNECTED:
+        ifr.ifr_flags &= ~IFF_UP;
+        break;
+      case TUNA_CONNECTED:
+        ifr.ifr_flags |= IFF_UP;
+        break;
+    }
+    if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
+        switch (errno) {
+          case ENODEV:;
+            goto start;
+        }
+        return TUNA_UNEXPECTED;
+    }
+    return 0;
+}
 
 ///////////////////////////////////////////////////////////////////////////////
 #endif
