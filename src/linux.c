@@ -41,11 +41,10 @@ tuna_create(tuna_device_t *device) {
         switch (errno) {
           case ENOMEM:;
           case ENOBUFS:;
-            return TUNA_NOT_ENOUGH_MEMORY;
+            return TUNA_OUT_OF_MEMORY;
           case EMFILE:;
-            return TUNA_TOO_MANY_HANDLES_OPEN;
           case ENFILE:;
-            return TUNA_TOO_MANY_HANDLES_OPEN_IN_SYSTEM;
+            return TUNA_OUT_OF_HANDLES;
         }
         return TUNA_UNEXPECTED;
     }
@@ -56,11 +55,10 @@ tuna_create(tuna_device_t *device) {
         TUNA_FREEZE_ERRNO { close(rtnl_sockfd); }
         switch (errno) {
           case ENOMEM:;
-            return TUNA_NOT_ENOUGH_MEMORY;
+            return TUNA_OUT_OF_MEMORY;
           case EMFILE:;
-            return TUNA_TOO_MANY_HANDLES_OPEN;
           case ENFILE:;
-            return TUNA_TOO_MANY_HANDLES_OPEN_IN_SYSTEM;
+            return TUNA_OUT_OF_HANDLES;
         }
         return TUNA_UNEXPECTED;
     }
@@ -73,7 +71,7 @@ tuna_create(tuna_device_t *device) {
         }
         switch (errno) {
           case EPERM:;
-            return TUNA_OPERATION_NOT_PERMITTED;
+            return TUNA_PERMISSION_DENIED;
         }
         return TUNA_UNEXPECTED;
     }
@@ -115,7 +113,7 @@ tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
           case ENODEV:;
-            return TUNA_NO_SUCH_DEVICE;
+            return TUNA_DEVICE_LOST;
         }
         return TUNA_UNEXPECTED;
     }
@@ -137,7 +135,7 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
           case ENODEV:;
-            return TUNA_NO_SUCH_DEVICE;
+            return TUNA_DEVICE_LOST;
         }
         return TUNA_UNEXPECTED;
     }
@@ -159,7 +157,7 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
           case ENODEV:;
-            return TUNA_NO_SUCH_DEVICE;
+            return TUNA_DEVICE_LOST;
         }
         return TUNA_UNEXPECTED;
     }
@@ -183,7 +181,7 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
           case ENODEV:;
             goto start;
           case EPERM:;
-            return TUNA_OPERATION_NOT_PERMITTED;
+            return TUNA_PERMISSION_DENIED;
         }
         return TUNA_UNEXPECTED;
     }
