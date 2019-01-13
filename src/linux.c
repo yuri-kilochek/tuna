@@ -113,6 +113,10 @@ tuna_error_t
 tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
+        switch (errno) {
+          case ENODEV:;
+            return TUNA_NO_SUCH_DEVICE;
+        }
         return TUNA_UNEXPECTED;
     }
     size_t raw_length = strnlen(ifr.ifr_name, sizeof(ifr.ifr_name));
@@ -131,6 +135,10 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
   start:;
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
+        switch (errno) {
+          case ENODEV:;
+            return TUNA_NO_SUCH_DEVICE;
+        }
         return TUNA_UNEXPECTED;
     }
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
@@ -149,6 +157,10 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
   start:;
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
+        switch (errno) {
+          case ENODEV:;
+            return TUNA_NO_SUCH_DEVICE;
+        }
         return TUNA_UNEXPECTED;
     }
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {

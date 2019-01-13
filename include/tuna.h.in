@@ -77,6 +77,7 @@ tuna_get_actual_version(void);
     yield(OPERATION_NOT_PERMITTED        , operation_not_permitted        ) \
     yield(TOO_MANY_HANDLES_OPEN          , too_many_handles_open          ) \
     yield(TOO_MANY_HANDLES_OPEN_IN_SYSTEM, too_many_handles_open_in_system) \
+    yield(NO_SUCH_DEVICE                 , no_such_device                 ) \
     yield(NAME_TOO_LONG                  , name_too_long                  ) \
 /**/
 
