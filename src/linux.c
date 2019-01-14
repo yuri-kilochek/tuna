@@ -45,11 +45,11 @@ tuna_create(tuna_device_t *device) {
           case EMFILE:;
           case ENFILE:;
             return TUNA_OUT_OF_HANDLES;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
 
-  create_tunnel:;
     int fd = open("/dev/net/tun", O_RDWR);
     if (fd == -1) {
         TUNA_FREEZE_ERRNO { close(rtnl_sockfd); }
@@ -59,8 +59,9 @@ tuna_create(tuna_device_t *device) {
           case EMFILE:;
           case ENFILE:;
             return TUNA_OUT_OF_HANDLES;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
 
     struct ifreq ifr = {.ifr_flags = IFF_TUN | IFF_NO_PI};
@@ -72,8 +73,9 @@ tuna_create(tuna_device_t *device) {
         switch (errno) {
           case EPERM:;
             return TUNA_PERMISSION_DENIED;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
 
     if (ioctl(rtnl_sockfd, SIOCGIFINDEX, &ifr) == -1) {
@@ -82,10 +84,9 @@ tuna_create(tuna_device_t *device) {
             close(rtnl_sockfd);
         }
         switch (errno) {
-          case ENODEV:;
-            goto create_tunnel;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
 
     device->priv_fd = fd;
@@ -98,10 +99,16 @@ tuna_error_t
 tuna_destroy(tuna_device_t *device) {
     if (close(device->priv_fd) == -1) {
         TUNA_FREEZE_ERRNO { close(device->priv_rtnl_sockfd); }
-        return TUNA_UNEXPECTED;
+        switch (errno) {
+          default:
+            return TUNA_UNEXPECTED;
+        }
     }
     if (close(device->priv_rtnl_sockfd) == -1) {
-        return TUNA_UNEXPECTED;
+        switch (errno) {
+          default:
+            return TUNA_UNEXPECTED;
+        }
     }
     return 0;
 }
@@ -112,10 +119,9 @@ tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          case ENODEV:;
-            return TUNA_DEVICE_LOST;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
     size_t raw_length = strnlen(ifr.ifr_name, sizeof(ifr.ifr_name));
     if (*length > raw_length) { *length = raw_length; }
@@ -129,22 +135,86 @@ tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
 }
 
 tuna_error_t
-tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
-  start:;
+tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
+    if (*length >= IFNAMSIZ) {
+        *length = IFNAMSIZ - 1;
+        return TUNA_NAME_TOO_LONG;
+    }
+
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          case ENODEV:;
-            return TUNA_DEVICE_LOST;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
+    }
+
+    if (!ifr.ifr_name[*length] && !memcmp(name, ifr.ifr_name, *length)) {
+        return 0;
+    }
+
+    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
+        switch (errno) {
+          default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+    short flags = ifr.ifr_flags;
+    if (flags & IFF_UP) {
+        ifr.ifr_flags = flags & ~IFF_UP;
+        if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
+            switch (errno) {
+              case EPERM:;
+                return TUNA_PERMISSION_DENIED;
+              default:
+                return TUNA_UNEXPECTED;
+            }
+        }
+    }
+
+    memcpy(ifr.ifr_newname, name, *length);
+    ifr.ifr_newname[*length] = '\0';
+    if (ioctl(device->priv_rtnl_sockfd, SIOCSIFNAME, &ifr) == -1) {
+        switch (errno) {
+          case EPERM:;
+            return TUNA_PERMISSION_DENIED;
+          case EEXIST:
+            return TUNA_NAME_IN_USE;
+          default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+    memcpy(ifr.ifr_name, name, *length);
+    ifr.ifr_name[*length] = '\0';
+
+    if (flags & IFF_UP) {
+        ifr.ifr_flags = flags;
+        if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
+            switch (errno) {
+              default:
+                return TUNA_UNEXPECTED;
+            }
+        }
+    }
+
+    return 0;
+}
+
+
+tuna_error_t
+tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
+    struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
+    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
+        switch (errno) {
+          default:
+            return TUNA_UNEXPECTED;
+        }
     }
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
-          case ENODEV:;
-            goto start;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
     *status = (ifr.ifr_flags & IFF_UP) ? TUNA_CONNECTED : TUNA_DISCONNECTED;
     return 0;
@@ -152,21 +222,18 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
 
 tuna_error_t
 tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
-  start:;
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          case ENODEV:;
-            return TUNA_DEVICE_LOST;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
-          case ENODEV:;
-            goto start;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
     switch (status) {
       case TUNA_DISCONNECTED:
@@ -178,12 +245,11 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
     }
     if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
         switch (errno) {
-          case ENODEV:;
-            goto start;
           case EPERM:;
             return TUNA_PERMISSION_DENIED;
+          default:
+            return TUNA_UNEXPECTED;
         }
-        return TUNA_UNEXPECTED;
     }
     return 0;
 }

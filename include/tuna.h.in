@@ -76,8 +76,8 @@ tuna_get_actual_version(void);
     yield(OUT_OF_MEMORY    , out_of_memory    ) \
     yield(OUT_OF_HANDLES   , ouf_of_handles   ) \
     yield(PERMISSION_DENIED, permission_denied) \
-    yield(DEVICE_LOST      , device_lost      ) \
     yield(NAME_TOO_LONG    , name_too_long    ) \
+    yield(NAME_IN_USE      , name_in_use      ) \
 /**/
 
 typedef enum {

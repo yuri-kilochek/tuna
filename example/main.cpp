@@ -47,6 +47,27 @@ int main() {
     }
     std::cout << "named " << name << std::endl;
 
+    switch (auto e = tuna_set_status(&device, TUNA_CONNECTED); e) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
+                  << " : " << errno << " " << strerror(errno) <<"\n";
+        return EXIT_FAILURE;
+    }
+
+    std::string new_name = "footun";
+    size_t new_name_length = new_name.size();
+    switch (auto e = tuna_set_name(&device, new_name.data(), &new_name_length); e) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_set_name failed: " << tuna_get_error_name(e)
+                  << " : " << errno << " " << strerror(errno) <<"\n";
+        return EXIT_FAILURE;
+    }
+    std::cout << "renamed to " << new_name << std::endl;
+
     for (int i = 0; i < 1000; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
