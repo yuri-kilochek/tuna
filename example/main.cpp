@@ -68,18 +68,22 @@ int main() {
     }
     std::cout << "renamed to " << new_name << std::endl;
 
+
+    uint_least8_t addr[] = {20, 30, 40, 50};
+    tuna_set_ip4_address(&device, addr, 24);
+
     for (int i = 0; i < 1000; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         tuna_status_t status = (i % 2) ? TUNA_CONNECTED : TUNA_DISCONNECTED;
-        switch (auto e = tuna_set_status(&device, status); e) {
-          case 0:
-            break;
-          default:
-            std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
-                      << " : " << errno << " " << strerror(errno) <<"\n";
-            return EXIT_FAILURE;
-        }
+        //switch (auto e = tuna_set_status(&device, status); e) {
+        //  case 0:
+        //    break;
+        //  default:
+        //    std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
+        //              << " : " << errno << " " << strerror(errno) <<"\n";
+        //    return EXIT_FAILURE;
+        //}
 
         std::cout << (1 + i) << " status: " << status << std::endl;
     }

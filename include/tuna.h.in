@@ -107,6 +107,7 @@ typedef struct {
     #if TUNA_PRIV_OS_LINUX
         int priv_ifindex;
         int priv_rtnl_sockfd;
+        uint32_t priv_nlmsg_seq;
     #endif
 } tuna_device_t;
 

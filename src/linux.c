@@ -13,6 +13,8 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 #include <linux/netlink.h>
+#include <linux/rtnetlink.h>
+#include <netinet/in.h>
 
 // TODO: delete
 #include <stdio.h>
@@ -92,6 +94,7 @@ tuna_create(tuna_device_t *device) {
     device->priv_fd = fd;
     device->priv_ifindex = ifr.ifr_ifindex;
     device->priv_rtnl_sockfd = rtnl_sockfd;
+    device->priv_nlmsg_seq = 0;
     return 0;
 }
 
@@ -196,6 +199,58 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
             }
         }
     }
+
+    return 0;
+}
+
+tuna_error_t
+tuna_set_ip4_address(tuna_device_t *device,
+                     uint_least8_t const octets[4],
+                     uint_least8_t prefix_length)
+{
+    union {
+        char buffer[1024];
+        struct nlmsghdr header;
+    } message = {
+        .header = {
+            .nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg)),
+            .nlmsg_type = RTM_NEWADDR,
+            .nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK |
+                           NLM_F_CREATE | NLM_F_REPLACE,
+            .nlmsg_seq = device->priv_nlmsg_seq++,
+        },
+    };
+    struct nlmsghdr *nlmsg = &message.header;
+
+    struct ifaddrmsg *ifa = NLMSG_DATA(nlmsg);
+    *ifa = (struct ifaddrmsg) {
+        .ifa_family = AF_INET,
+        .ifa_prefixlen = prefix_length,
+        .ifa_index = device->priv_ifindex,
+    };
+
+
+    struct rtattr *rta =
+        (void *)((char *)nlmsg + NLMSG_ALIGN(nlmsg->nlmsg_len));
+    *rta = (struct rtattr) {
+        .rta_len = RTA_LENGTH(sizeof(struct in_addr)),
+        .rta_type = IFA_LOCAL,
+    };
+
+    struct in_addr *ia = RTA_DATA(rta);
+    *ia = (struct in_addr) {
+        octets[0] << 24 |
+        octets[1] << 16 |
+        octets[2] <<  8 |
+        octets[3]
+    };
+
+    nlmsg->nlmsg_len = NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(rta->rta_len);
+
+    int size = sendto(device->priv_rtnl_sockfd, nlmsg, nlmsg->nlmsg_len, 0,
+                      &(struct sockaddr_nl){AF_NETLINK},
+                      sizeof(struct sockaddr_nl));
+    printf("SENDTO: %d\n", size);
 
     return 0;
 }
