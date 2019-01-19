@@ -208,49 +208,85 @@ tuna_set_ip4_address(tuna_device_t *device,
                      uint_least8_t const octets[4],
                      uint_least8_t prefix_length)
 {
-    union {
-        char buffer[1024];
-        struct nlmsghdr header;
-    } message = {
-        .header = {
-            .nlmsg_len = NLMSG_LENGTH(sizeof(struct ifaddrmsg)),
-            .nlmsg_type = RTM_NEWADDR,
-            .nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK |
-                           NLM_F_CREATE | NLM_F_REPLACE,
-            .nlmsg_seq = device->priv_nlmsg_seq++,
-        },
-    };
-    struct nlmsghdr *nlmsg = &message.header;
+    struct in_addr s = {};
+    memcpy(&s.s_addr, octets, 4);
 
-    struct ifaddrmsg *ifa = NLMSG_DATA(nlmsg);
-    *ifa = (struct ifaddrmsg) {
+    struct ifaddrmsg ifa = {
         .ifa_family = AF_INET,
         .ifa_prefixlen = prefix_length,
         .ifa_index = device->priv_ifindex,
     };
 
+    enum {
+        reqrta_off = NLMSG_ALIGN(NLMSG_LENGTH(sizeof(ifa))),
+        reqrta_len = RTA_LENGTH(sizeof(s)),
+    };
+    union {
+        char buf[reqrta_off + reqrta_len];
+        struct nlmsghdr hdr;
+    } reqmsg = {
+        .hdr = {
+            .nlmsg_len = sizeof(reqmsg),
+            .nlmsg_type = RTM_NEWADDR,
+            .nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK |
+                           NLM_F_CREATE | NLM_F_REPLACE,
+            .nlmsg_seq = device->priv_nlmsg_seq,
+        },
+    };
 
-    struct rtattr *rta =
-        (void *)((char *)nlmsg + NLMSG_ALIGN(nlmsg->nlmsg_len));
-    *rta = (struct rtattr) {
-        .rta_len = RTA_LENGTH(sizeof(struct in_addr)),
+    struct nlmsghdr *reqnlmsg = &reqmsg.hdr;
+    memcpy(NLMSG_DATA(reqnlmsg), &ifa, sizeof(ifa));
+
+    struct rtattr *reqrta = memcpy(reqmsg.buf + reqrta_off, &(struct rtattr) {
+        .rta_len = reqrta_len,
         .rta_type = IFA_LOCAL,
-    };
+    }, sizeof(*reqrta));
+    memcpy(RTA_DATA(reqrta), &s, sizeof(s));
 
-    struct in_addr *ia = RTA_DATA(rta);
-    *ia = (struct in_addr) {
-        octets[0] << 24 |
-        octets[1] << 16 |
-        octets[2] <<  8 |
-        octets[3]
-    };
+    struct sockaddr_nl nl = {AF_NETLINK};
 
-    nlmsg->nlmsg_len = NLMSG_ALIGN(nlmsg->nlmsg_len) + RTA_ALIGN(rta->rta_len);
+    switch (sendto(device->priv_rtnl_sockfd, &reqmsg, sizeof(reqmsg), 0,
+                  (struct sockaddr *)&nl, sizeof(nl)))
+    {
+      case sizeof(reqmsg):
+        ++device->priv_nlmsg_seq;
+        break;
+      case -1:
+        switch (errno) {
+          case ENOMEM:
+          case ENOBUFS:
+            return TUNA_OUT_OF_MEMORY;
+          default:
+            return TUNA_UNEXPECTED;
+        }
+      default:
+        return TUNA_UNEXPECTED;
+    }
 
-    int size = sendto(device->priv_rtnl_sockfd, nlmsg, nlmsg->nlmsg_len, 0,
-                      &(struct sockaddr_nl){AF_NETLINK},
-                      sizeof(struct sockaddr_nl));
-    printf("SENDTO: %d\n", size);
+    //struct nlmsgerr nlme;
+
+    //union {
+    //    char buf[NLMSG_LENGTH(sizeof(nlme))];
+    //    struct nlmsghdr hdr;
+    //} resmsg;
+
+    //switch (recvfrom(device->priv_rtnl_sockfd, &resmsg, sizeof(resmsg), 0,
+    //                 (struct sockaddr *)&nl, NULL))
+    //{
+    //  case sizeof(resmsg):
+    //    ++device->priv_nlmsg_seq;
+    //    break;
+    //  case -1:
+    //    switch (errno) {
+    //      case ENOMEM:
+    //      case ENOBUFS:
+    //        return TUNA_OUT_OF_MEMORY;
+    //      default:
+    //        return TUNA_UNEXPECTED;
+    //    }
+    //  default:
+    //    return TUNA_UNEXPECTED;
+    //}
 
     return 0;
 }
