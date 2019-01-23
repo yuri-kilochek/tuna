@@ -5,6 +5,7 @@
 
 #include <errno.h>
 #include <string.h>
+#include <assert.h>
 
 #include <fcntl.h>
 #include <unistd.h>
@@ -38,6 +39,8 @@
 
 tuna_error_t
 tuna_create(tuna_device_t *device) {
+    assert(device);
+
     int rtnl_sockfd = socket(AF_NETLINK, SOCK_DGRAM, NETLINK_ROUTE);
     if (rtnl_sockfd == -1) {
         switch (errno) {
@@ -100,6 +103,8 @@ tuna_create(tuna_device_t *device) {
 
 tuna_error_t
 tuna_destroy(tuna_device_t *device) {
+    assert(device);
+
     if (close(device->priv_fd) == -1) {
         TUNA_FREEZE_ERRNO { close(device->priv_rtnl_sockfd); }
         switch (errno) {
@@ -107,18 +112,24 @@ tuna_destroy(tuna_device_t *device) {
             return TUNA_UNEXPECTED;
         }
     }
+
     if (close(device->priv_rtnl_sockfd) == -1) {
         switch (errno) {
           default:
             return TUNA_UNEXPECTED;
         }
     }
+
     return 0;
 }
 
 
 tuna_error_t
 tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
+    assert(device);
+    assert(name);
+    assert(length);
+
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
@@ -134,11 +145,16 @@ tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
         *length = raw_length;
         return TUNA_NAME_TOO_LONG;
     }
+
     return 0;
 }
 
 tuna_error_t
 tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
+    assert(device);
+    assert(name);
+    assert(length);
+
     if (*length >= IFNAMSIZ) {
         *length = IFNAMSIZ - 1;
         return TUNA_NAME_TOO_LONG;
@@ -208,6 +224,10 @@ tuna_set_ip4_address(tuna_device_t *device,
                      uint_least8_t const octets[4],
                      uint_least8_t prefix_length)
 {
+    assert(device);
+    assert(octets);
+    assert(prefix_length <= 32);
+
     struct in_addr s = {};
     memcpy(&s.s_addr, octets, 4);
 
@@ -294,6 +314,9 @@ tuna_set_ip4_address(tuna_device_t *device,
 
 tuna_error_t
 tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
+    assert(device);
+    assert(status);
+
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
@@ -301,6 +324,7 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
             return TUNA_UNEXPECTED;
         }
     }
+
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
           default:
@@ -308,11 +332,14 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
         }
     }
     *status = (ifr.ifr_flags & IFF_UP) ? TUNA_CONNECTED : TUNA_DISCONNECTED;
+
     return 0;
 }
 
 tuna_error_t
 tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
+    assert(device);
+
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
@@ -320,6 +347,7 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
             return TUNA_UNEXPECTED;
         }
     }
+
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
           default:
@@ -342,6 +370,7 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
             return TUNA_UNEXPECTED;
         }
     }
+
     return 0;
 }
 
