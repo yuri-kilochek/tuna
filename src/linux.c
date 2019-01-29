@@ -81,7 +81,7 @@ tuna_create(tuna_device_t *device) {
         }
         switch (errno) {
           case EPERM:;
-            return TUNA_PERMISSION_DENIED;
+            return TUNA_NOT_PERMITTED;
           default:
             return TUNA_UNEXPECTED;
         }
@@ -188,7 +188,7 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
         if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
             switch (errno) {
               case EPERM:;
-                return TUNA_PERMISSION_DENIED;
+                return TUNA_NOT_PERMITTED;
               default:
                 return TUNA_UNEXPECTED;
             }
@@ -200,7 +200,7 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
     if (ioctl(device->priv_rtnl_sockfd, SIOCSIFNAME, &ifr) == -1) {
         switch (errno) {
           case EPERM:;
-            return TUNA_PERMISSION_DENIED;
+            return TUNA_NOT_PERMITTED;
           case EEXIST:
             return TUNA_NAME_IN_USE;
           default:
@@ -446,7 +446,7 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
     if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
         switch (errno) {
           case EPERM:;
-            return TUNA_PERMISSION_DENIED;
+            return TUNA_NOT_PERMITTED;
           default:
             return TUNA_UNEXPECTED;
         }

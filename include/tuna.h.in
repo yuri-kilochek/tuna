@@ -72,12 +72,12 @@ tuna_get_actual_version(void);
 ///////////////////////////////////////////////////////////////////////////////
 
 #define TUNA_PRIV_ENUMERATE_ERRORS(yield) \
-    yield(UNEXPECTED       , unexpected       ) \
-    yield(OUT_OF_MEMORY    , out_of_memory    ) \
-    yield(OUT_OF_HANDLES   , ouf_of_handles   ) \
-    yield(PERMISSION_DENIED, permission_denied) \
-    yield(NAME_TOO_LONG    , name_too_long    ) \
-    yield(NAME_IN_USE      , name_in_use      ) \
+    yield(UNEXPECTED       , unexpected    ) \
+    yield(OUT_OF_MEMORY    , out_of_memory ) \
+    yield(OUT_OF_HANDLES   , ouf_of_handles) \
+    yield(NOT_PERMITTED    , not_permitted ) \
+    yield(NAME_TOO_LONG    , name_too_long ) \
+    yield(NAME_IN_USE      , name_in_use   ) \
 /**/
 
 typedef enum {
