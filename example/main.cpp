@@ -9,7 +9,7 @@
 
 int main() {
     tuna_device_t device;
-    switch (auto e = tuna_create(&device); e) {
+    switch (auto e = tuna_create(&device)) {
       case 0:
         break;
       default:
@@ -18,7 +18,7 @@ int main() {
         return EXIT_FAILURE;
     }
     BOOST_SCOPE_EXIT_ALL(&) {
-        switch (auto e = tuna_destroy(&device); e) {
+        switch (auto e = tuna_destroy(&device)) {
           case 0:
             break;
           default:
@@ -33,7 +33,7 @@ int main() {
     name.resize(name.capacity());
     retry_get_name: {
         std::size_t length = name.size();
-        switch (auto e = tuna_get_name(&device, name.data(), &length); e) {
+        switch (auto e = tuna_get_name(&device, name.data(), &length)) {
           case 0:
           case TUNA_NAME_TOO_LONG:
             name.resize(length);
@@ -47,7 +47,7 @@ int main() {
     }
     std::cout << "named " << name << std::endl;
 
-    switch (auto e = tuna_set_status(&device, TUNA_CONNECTED); e) {
+    switch (auto e = tuna_set_status(&device, TUNA_CONNECTED)) {
       case 0:
         break;
       default:
@@ -58,7 +58,7 @@ int main() {
 
     std::string new_name = "footun";
     size_t new_name_length = new_name.size();
-    switch (auto e = tuna_set_name(&device, new_name.data(), &new_name_length); e) {
+    switch (auto e = tuna_set_name(&device, new_name.data(), &new_name_length)) {
       case 0:
         break;
       default:
@@ -70,7 +70,14 @@ int main() {
 
 
     uint_least8_t addr[] = {20, 30, 40, 50};
-    tuna_set_ip4_address(&device, addr, 24);
+    switch (auto e = tuna_set_ip4_address(&device, addr, 24)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_set_ip4_address failed: " << tuna_get_error_name(e)
+                  << " : " << errno << " " << strerror(errno) <<"\n";
+        return EXIT_FAILURE;
+    }
 
     for (int i = 0; i < 1000; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));

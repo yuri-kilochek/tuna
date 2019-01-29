@@ -3,12 +3,14 @@
 #if TUNA_PRIV_OS_LINUX
 ///////////////////////////////////////////////////////////////////////////////
 
+#include <time.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
 
 #include <fcntl.h>
 #include <unistd.h>
+#include <sys/time.h>
 #include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <linux/if.h>
@@ -22,14 +24,14 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-//#define TUNA_TRY(...) \
-//    for (tuna_error_t tuna_priv_try_error_##__LINE__ = (__VA_ARGS__); \
-//         tuna_priv_try_error_##__LINE__; ) \
-//    for (int tuna_priv_try_state_##__LINE__ = 0; 1; \
-//         tuna_priv_try_state_##__LINE__ = 1) \
-//    if (tuna_priv_try_state_##__LINE__) { \
-//        return tuna_priv_try_error_##__LINE__; \
-//    } else
+#define TUNA_TRY(...) \
+    for (tuna_error_t tuna_priv_try_error_##__LINE__ = (__VA_ARGS__); \
+         tuna_priv_try_error_##__LINE__; ) \
+    for (int tuna_priv_try_state_##__LINE__ = 0; 1; \
+         tuna_priv_try_state_##__LINE__ = 1) \
+    if (tuna_priv_try_state_##__LINE__) { \
+        return tuna_priv_try_error_##__LINE__; \
+    } else
 
 #define TUNA_FREEZE_ERRNO \
     for (int frozen_errno_##__LINE__ = errno; \
@@ -219,6 +221,112 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
     return 0;
 }
 
+static
+tuna_error_t
+tuna_priv_get_now(struct timeval *tv) {
+    struct timespec ts;
+    if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == -1) {
+        switch (errno) {
+          default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+    tv->tv_sec = ts.tv_sec;
+    tv->tv_usec = ts.tv_nsec / 1000;
+    return 0;
+}
+
+static
+struct timeval const tuna_priv_nl_resend_in = {0, 500000};
+
+static
+tuna_error_t
+tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
+                                          struct nlmsghdr *res) {
+    req->nlmsg_flags |= NLM_F_REQUEST | NLM_F_ACK;
+  send:;
+    req->nlmsg_seq = device->priv_nlmsg_seq++;
+    struct sockaddr_nl snl = {AF_NETLINK};
+    ssize_t out_len = sendmsg(device->priv_rtnl_sockfd, &(struct msghdr) {
+        .msg_name = &snl,
+        .msg_namelen = sizeof(snl),
+        .msg_iov = &(struct iovec){req, req->nlmsg_len},
+        .msg_iovlen = 1,
+    }, 0);
+    if (out_len == -1) {
+        switch (errno) {
+          case EINTR:
+            goto send;
+          case ENOMEM:
+          case ENOBUFS:
+            return TUNA_OUT_OF_MEMORY;
+          default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+    assert(out_len == req->nlmsg_len);
+
+    struct timeval resend_at;
+    TUNA_TRY(tuna_priv_get_now(&resend_at));
+    timeradd(&resend_at, &tuna_priv_nl_resend_in, &resend_at);
+
+    struct msghdr in_msg = {
+        .msg_name = &snl,
+        .msg_namelen = sizeof(snl),
+        .msg_iov = &(struct iovec){res, res->nlmsg_len},
+        .msg_iovlen = 1,
+    };
+  recv:;
+    struct timeval timeout;
+    TUNA_TRY(tuna_priv_get_now(&timeout));
+    if (timercmp(&timeout, &resend_at, >=)) { goto send; }
+    timersub(&timeout, &resend_at, &timeout);
+    if (setsockopt(device->priv_rtnl_sockfd, SOL_SOCKET,
+                   SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
+    {
+        switch (errno) {
+          default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+
+    ssize_t in_len = recvmsg(device->priv_rtnl_sockfd, &in_msg, 0);
+    if (in_len == -1) {
+        switch (errno) {
+          case EAGAIN:
+          #if EWOULDBLOCK != EAGAIN
+            case EWOULDBLOCK:
+          #endif
+            goto send;
+          case EINTR:
+            goto recv;
+          case ENOMEM:
+          case ENOBUFS:
+            return TUNA_OUT_OF_MEMORY;
+          default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+
+    if (snl.nl_pid != 0) { goto recv; }
+
+    for (struct nlmsghdr *nlmsg = res;
+         NLMSG_OK(nlmsg, in_len);
+         nlmsg = NLMSG_NEXT(nlmsg, in_len))
+    {
+        if (nlmsg->nlmsg_type == NLMSG_NOOP) { continue; }
+        if (nlmsg->nlmsg_type == NLMSG_DONE) { continue; }
+        if (nlmsg->nlmsg_flags & NLM_F_REQUEST) { continue; }
+        if (nlmsg->nlmsg_seq != req->nlmsg_seq) { continue; }
+        assert(!(res->nlmsg_flags & NLM_F_MULTI));
+
+        memmove(res, nlmsg, nlmsg->nlmsg_len);
+
+        return 0;
+    }
+    goto recv;
+}
+
 tuna_error_t
 tuna_set_ip4_address(tuna_device_t *device,
                      uint_least8_t const octets[4],
@@ -228,85 +336,57 @@ tuna_set_ip4_address(tuna_device_t *device,
     assert(octets);
     assert(prefix_length <= 32);
 
-    struct in_addr s = {};
-    memcpy(&s.s_addr, octets, 4);
-
-    struct ifaddrmsg ifa = {
-        .ifa_family = AF_INET,
-        .ifa_prefixlen = prefix_length,
-        .ifa_index = device->priv_ifindex,
-    };
-
-    enum {
-        reqrta_off = NLMSG_ALIGN(NLMSG_LENGTH(sizeof(ifa))),
-        reqrta_len = RTA_LENGTH(sizeof(s)),
-    };
-    union {
-        char buf[reqrta_off + reqrta_len];
-        struct nlmsghdr hdr;
-    } reqmsg = {
-        .hdr = {
-            .nlmsg_len = sizeof(reqmsg),
+    struct {
+        struct nlmsghdr nlmsg;
+        struct ifaddrmsg ifa;
+        struct rtattr rta;
+        union {
+            struct in_addr s;
+            uint8_t octets[4];
+        };
+    } req = {
+        .nlmsg = {
+            .nlmsg_len = (char *)&req.s - (char *)&req.nlmsg + sizeof(req.s),
             .nlmsg_type = RTM_NEWADDR,
-            .nlmsg_flags = NLM_F_REQUEST | NLM_F_ACK |
-                           NLM_F_CREATE | NLM_F_REPLACE,
-            .nlmsg_seq = device->priv_nlmsg_seq,
+            .nlmsg_flags = NLM_F_CREATE | NLM_F_REPLACE,
+        },
+        .ifa = {
+            .ifa_family = AF_INET,
+            .ifa_prefixlen = prefix_length,
+            .ifa_index = device->priv_ifindex,
+        },
+        .rta = {
+            .rta_len = (char *)&req.s - (char *)&req.rta + sizeof(req.s),
+            .rta_type = IFA_LOCAL,
+        },
+        .octets = {
+            octets[0],
+            octets[1],
+            octets[2],
+            octets[3],
         },
     };
+    assert((char *)&req.ifa - (char *)&req.nlmsg == NLMSG_LENGTH(0));
+    assert((char *)&req.rta - (char *)&req.nlmsg ==
+           NLMSG_SPACE(sizeof(req.ifa)));
+    assert((char *)&req.s - (char *)&req.rta == RTA_LENGTH(0));
+    assert(sizeof(req.s) == sizeof(req.octets));
 
-    struct nlmsghdr *reqnlmsg = &reqmsg.hdr;
-    memcpy(NLMSG_DATA(reqnlmsg), &ifa, sizeof(ifa));
+    struct {
+        struct nlmsghdr nlmsg;
+        struct nlmsgerr err;
+    } res = {
+        .nlmsg.nlmsg_len = (char *)&res.err - (char *)&res.nlmsg +
+                           sizeof(res.err),
+    };
+    assert((char *)&res.err - (char *)&res.nlmsg == NLMSG_LENGTH(0));
 
-    struct rtattr *reqrta = memcpy(reqmsg.buf + reqrta_off, &(struct rtattr) {
-        .rta_len = reqrta_len,
-        .rta_type = IFA_LOCAL,
-    }, sizeof(*reqrta));
-    memcpy(RTA_DATA(reqrta), &s, sizeof(s));
-
-    struct sockaddr_nl nl = {AF_NETLINK};
-
-    switch (sendto(device->priv_rtnl_sockfd, &reqmsg, sizeof(reqmsg), 0,
-                  (struct sockaddr *)&nl, sizeof(nl)))
-    {
-      case sizeof(reqmsg):
-        ++device->priv_nlmsg_seq;
-        break;
-      case -1:
-        switch (errno) {
-          case ENOMEM:
-          case ENOBUFS:
-            return TUNA_OUT_OF_MEMORY;
-          default:
-            return TUNA_UNEXPECTED;
-        }
-      default:
+    TUNA_TRY(tuna_priv_exchange(device, &req.nlmsg, &res.nlmsg));
+    assert(res.nlmsg.nlmsg_type == NLMSG_ERROR);
+    if (res.err.error) {
+        errno = -res.err.error;
         return TUNA_UNEXPECTED;
     }
-
-    //struct nlmsgerr nlme;
-
-    //union {
-    //    char buf[NLMSG_LENGTH(sizeof(nlme))];
-    //    struct nlmsghdr hdr;
-    //} resmsg;
-
-    //switch (recvfrom(device->priv_rtnl_sockfd, &resmsg, sizeof(resmsg), 0,
-    //                 (struct sockaddr *)&nl, NULL))
-    //{
-    //  case sizeof(resmsg):
-    //    ++device->priv_nlmsg_seq;
-    //    break;
-    //  case -1:
-    //    switch (errno) {
-    //      case ENOMEM:
-    //      case ENOBUFS:
-    //        return TUNA_OUT_OF_MEMORY;
-    //      default:
-    //        return TUNA_UNEXPECTED;
-    //    }
-    //  default:
-    //    return TUNA_UNEXPECTED;
-    //}
 
     return 0;
 }
