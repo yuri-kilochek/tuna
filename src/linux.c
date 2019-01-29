@@ -238,17 +238,17 @@ tuna_priv_get_now(struct timeval *tv) {
     return 0;
 }
 
-static
-struct timeval const tuna_priv_nl_resend_in = {0, 500000};
 
 static
 tuna_error_t
-tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
-                                          struct nlmsghdr *res) {
+tuna_priv_exchange(tuna_device_t *device,
+                   struct nlmsghdr *req, struct nlmsghdr *res)
+{
     req->nlmsg_flags |= NLM_F_REQUEST | NLM_F_ACK;
+
   send:;
-    req->nlmsg_seq = device->priv_nlmsg_seq++;
     struct sockaddr_nl snl = {AF_NETLINK};
+    req->nlmsg_seq = device->priv_nlmsg_seq++;
     ssize_t out_len = sendmsg(device->priv_rtnl_sockfd, &(struct msghdr) {
         .msg_name = &snl,
         .msg_namelen = sizeof(snl),
@@ -268,23 +268,18 @@ tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
     }
     assert(out_len == req->nlmsg_len);
 
-    struct timeval resend_at;
-    TUNA_PRIV_TRY(tuna_priv_get_now(&resend_at));
-    timeradd(&resend_at, &tuna_priv_nl_resend_in, &resend_at);
-
-    struct msghdr in_msg = {
-        .msg_name = &snl,
-        .msg_namelen = sizeof(snl),
-        .msg_iov = &(struct iovec){res, res->nlmsg_len},
-        .msg_iovlen = 1,
-    };
-  recv:;
+    static struct timeval const max_delay = {0, 500000};
     struct timeval timeout;
     TUNA_PRIV_TRY(tuna_priv_get_now(&timeout));
-    if (timercmp(&timeout, &resend_at, >=)) { goto send; }
-    timersub(&timeout, &resend_at, &timeout);
+    timeradd(&timeout, &max_delay, &timeout);
+
+  recv:;
+    struct timeval delay;
+    TUNA_PRIV_TRY(tuna_priv_get_now(&delay));
+    if (timercmp(&delay, &timeout, >=)) { goto send; }
+    timersub(&delay, &timeout, &delay);
     if (setsockopt(device->priv_rtnl_sockfd, SOL_SOCKET,
-                   SO_RCVTIMEO, &timeout, sizeof(timeout)) == -1)
+                   SO_RCVTIMEO, &delay, sizeof(delay)) == -1)
     {
         switch (errno) {
           default:
@@ -292,7 +287,12 @@ tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
         }
     }
 
-    ssize_t in_len = recvmsg(device->priv_rtnl_sockfd, &in_msg, 0);
+    ssize_t in_len = recvmsg(device->priv_rtnl_sockfd, &(struct msghdr){
+        .msg_name = &snl,
+        .msg_namelen = sizeof(snl),
+        .msg_iov = &(struct iovec){res, res->nlmsg_len},
+        .msg_iovlen = 1,
+    }, 0);
     if (in_len == -1) {
         switch (errno) {
           case EAGAIN:
@@ -316,11 +316,10 @@ tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
          NLMSG_OK(nlmsg, in_len);
          nlmsg = NLMSG_NEXT(nlmsg, in_len))
     {
-        if (nlmsg->nlmsg_type == NLMSG_NOOP) { continue; }
-        if (nlmsg->nlmsg_type == NLMSG_DONE) { continue; }
         if (nlmsg->nlmsg_flags & NLM_F_REQUEST) { continue; }
-        if (nlmsg->nlmsg_seq != req->nlmsg_seq) { continue; }
         assert(!(res->nlmsg_flags & NLM_F_MULTI));
+        if (nlmsg->nlmsg_type == NLMSG_NOOP) { continue; }
+        if (nlmsg->nlmsg_seq != req->nlmsg_seq) { continue; }
 
         memmove(res, nlmsg, nlmsg->nlmsg_len);
 
