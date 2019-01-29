@@ -24,7 +24,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#define TUNA_TRY(...) \
+#define TUNA_PRIV_TRY(...) \
     for (tuna_error_t tuna_priv_try_error_##__LINE__ = (__VA_ARGS__); \
          tuna_priv_try_error_##__LINE__; ) \
     for (int tuna_priv_try_state_##__LINE__ = 0; 1; \
@@ -33,10 +33,12 @@
         return tuna_priv_try_error_##__LINE__; \
     } else
 
-#define TUNA_FREEZE_ERRNO \
-    for (int frozen_errno_##__LINE__ = errno; \
-         frozen_errno_##__LINE__; \
-         (errno = frozen_errno_##__LINE__), frozen_errno_##__LINE__ = 0)
+#define TUNA_PRIV_FREEZE_ERRNO \
+    for (int tuna_priv_frozen_errno_##__LINE__ = errno, \
+             tuna_priv_freeze_errno_state_##__LINE__ = 1; \
+         tuna_priv_freeze_errno_state_##__LINE__; \
+         (errno = tuna_priv_frozen_errno_##__LINE__), \
+         tuna_priv_freeze_errno_state_##__LINE__ = 0)
 
 
 tuna_error_t
@@ -59,7 +61,7 @@ tuna_create(tuna_device_t *device) {
 
     int fd = open("/dev/net/tun", O_RDWR);
     if (fd == -1) {
-        TUNA_FREEZE_ERRNO { close(rtnl_sockfd); }
+        TUNA_PRIV_FREEZE_ERRNO { close(rtnl_sockfd); }
         switch (errno) {
           case ENOMEM:;
             return TUNA_OUT_OF_MEMORY;
@@ -73,7 +75,7 @@ tuna_create(tuna_device_t *device) {
 
     struct ifreq ifr = {.ifr_flags = IFF_TUN | IFF_NO_PI};
     if (ioctl(fd, TUNSETIFF, &ifr) == -1) {
-        TUNA_FREEZE_ERRNO {
+        TUNA_PRIV_FREEZE_ERRNO {
             close(fd);
             close(rtnl_sockfd);
         }
@@ -86,7 +88,7 @@ tuna_create(tuna_device_t *device) {
     }
 
     if (ioctl(rtnl_sockfd, SIOCGIFINDEX, &ifr) == -1) {
-        TUNA_FREEZE_ERRNO {
+        TUNA_PRIV_FREEZE_ERRNO {
             close(fd);
             close(rtnl_sockfd);
         }
@@ -108,7 +110,7 @@ tuna_destroy(tuna_device_t *device) {
     assert(device);
 
     if (close(device->priv_fd) == -1) {
-        TUNA_FREEZE_ERRNO { close(device->priv_rtnl_sockfd); }
+        TUNA_PRIV_FREEZE_ERRNO { close(device->priv_rtnl_sockfd); }
         switch (errno) {
           default:
             return TUNA_UNEXPECTED;
@@ -267,7 +269,7 @@ tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
     assert(out_len == req->nlmsg_len);
 
     struct timeval resend_at;
-    TUNA_TRY(tuna_priv_get_now(&resend_at));
+    TUNA_PRIV_TRY(tuna_priv_get_now(&resend_at));
     timeradd(&resend_at, &tuna_priv_nl_resend_in, &resend_at);
 
     struct msghdr in_msg = {
@@ -278,7 +280,7 @@ tuna_priv_exchange(tuna_device_t *device, struct nlmsghdr *req,
     };
   recv:;
     struct timeval timeout;
-    TUNA_TRY(tuna_priv_get_now(&timeout));
+    TUNA_PRIV_TRY(tuna_priv_get_now(&timeout));
     if (timercmp(&timeout, &resend_at, >=)) { goto send; }
     timersub(&timeout, &resend_at, &timeout);
     if (setsockopt(device->priv_rtnl_sockfd, SOL_SOCKET,
@@ -381,7 +383,7 @@ tuna_set_ip4_address(tuna_device_t *device,
     };
     assert((char *)&res.err - (char *)&res.nlmsg == NLMSG_LENGTH(0));
 
-    TUNA_TRY(tuna_priv_exchange(device, &req.nlmsg, &res.nlmsg));
+    TUNA_PRIV_TRY(tuna_priv_exchange(device, &req.nlmsg, &res.nlmsg));
     assert(res.nlmsg.nlmsg_type == NLMSG_ERROR);
     if (res.err.error) {
         errno = -res.err.error;
