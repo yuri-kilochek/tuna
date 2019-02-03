@@ -94,20 +94,12 @@ tuna_get_error_name(tuna_error_t error);
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if TUNA_PRIV_OS_WINDOWS
-    typedef void *tuna_native_handle_t;
-    #define TUNA_PRIV_NATIVE_HANDLE_NAME priv_handle
-#else
-    typedef int tuna_native_handle_t;
-    #define TUNA_PRIV_NATIVE_HANDLE_NAME priv_fd
-#endif
 
 typedef struct {
-    tuna_native_handle_t TUNA_PRIV_NATIVE_HANDLE_NAME;
     #if TUNA_PRIV_OS_LINUX
+        int priv_fd;
         int priv_ifindex;
-        int priv_rtnl_sockfd;
-        uint32_t priv_nlmsg_seq;
+        struct nl_sock *priv_nl_sock;
     #endif
 } tuna_device_t;
 
@@ -117,15 +109,19 @@ tuna_error_t
 tuna_create(tuna_device_t *device);
 
 TUNA_PRIV_API
-tuna_error_t
+void
 tuna_destroy(tuna_device_t *device);
 
 
-static inline
-tuna_native_handle_t
-tuna_get_native_handle(tuna_device_t const *device) {
-    return device->TUNA_PRIV_NATIVE_HANDLE_NAME;
-}
+#if TUNA_PRIV_OS_WINDOWS
+    typedef void *tuna_handle_t;
+#else
+    typedef int tuna_handle_t;
+#endif
+
+TUNA_PRIV_API
+tuna_handle_t
+tuna_get_handle(tuna_device_t const *device);
 
 
 TUNA_PRIV_API

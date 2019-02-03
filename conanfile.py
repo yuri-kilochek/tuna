@@ -13,7 +13,7 @@ class TunaConan(ConanFile):
         'shared': [False, True],
     }
     default_options = {
-        'shared': False,        
+        'shared': True,        
     }
     exports = (
         'VERSION',
