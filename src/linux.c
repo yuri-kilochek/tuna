@@ -54,11 +54,12 @@ tuna_create(tuna_device_t *device) {
           case EMFILE:;
           case ENFILE:;
             return TUNA_OUT_OF_HANDLES;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
 
+  open:;
     int fd = open("/dev/net/tun", O_RDWR);
     if (fd == -1) {
         TUNA_PRIV_FREEZE_ERRNO { close(rtnl_sockfd); }
@@ -68,7 +69,7 @@ tuna_create(tuna_device_t *device) {
           case EMFILE:;
           case ENFILE:;
             return TUNA_OUT_OF_HANDLES;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -82,7 +83,7 @@ tuna_create(tuna_device_t *device) {
         switch (errno) {
           case EPERM:;
             return TUNA_NOT_PERMITTED;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -93,7 +94,10 @@ tuna_create(tuna_device_t *device) {
             close(rtnl_sockfd);
         }
         switch (errno) {
-          default:
+          case ENODEV:;
+            close(fd);
+            goto open;
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -112,14 +116,14 @@ tuna_destroy(tuna_device_t *device) {
     if (close(device->priv_fd) == -1) {
         TUNA_PRIV_FREEZE_ERRNO { close(device->priv_rtnl_sockfd); }
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
 
     if (close(device->priv_rtnl_sockfd) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -137,7 +141,7 @@ tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -167,7 +171,7 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -178,7 +182,7 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
 
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -189,7 +193,7 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
             switch (errno) {
               case EPERM:;
                 return TUNA_NOT_PERMITTED;
-              default:
+              default:;
                 return TUNA_UNEXPECTED;
             }
         }
@@ -201,9 +205,9 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
         switch (errno) {
           case EPERM:;
             return TUNA_NOT_PERMITTED;
-          case EEXIST:
+          case EEXIST:;
             return TUNA_NAME_IN_USE;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -214,7 +218,7 @@ tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
         ifr.ifr_flags = flags;
         if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
             switch (errno) {
-              default:
+              default:;
                 return TUNA_UNEXPECTED;
             }
         }
@@ -229,7 +233,7 @@ tuna_priv_get_now(struct timeval *tv) {
     struct timespec ts;
     if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -257,12 +261,12 @@ tuna_priv_exchange(tuna_device_t *device,
     }, 0);
     if (out_len == -1) {
         switch (errno) {
-          case EINTR:
+          case EINTR:;
             goto send;
-          case ENOMEM:
-          case ENOBUFS:
+          case ENOMEM:;
+          case ENOBUFS:;
             return TUNA_OUT_OF_MEMORY;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -282,7 +286,7 @@ tuna_priv_exchange(tuna_device_t *device,
                    SO_RCVTIMEO, &delay, sizeof(delay)) == -1)
     {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -295,17 +299,17 @@ tuna_priv_exchange(tuna_device_t *device,
     }, 0);
     if (in_len == -1) {
         switch (errno) {
-          case EAGAIN:
+          case EAGAIN:;
           #if EWOULDBLOCK != EAGAIN
-            case EWOULDBLOCK:
+            case EWOULDBLOCK:;
           #endif
             goto send;
-          case EINTR:
+          case EINTR:;
             goto recv;
-          case ENOMEM:
-          case ENOBUFS:
+          case ENOMEM:;
+          case ENOBUFS:;
             return TUNA_OUT_OF_MEMORY;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -401,14 +405,14 @@ tuna_get_status(tuna_device_t const *device, tuna_status_t *status) {
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
 
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
@@ -424,22 +428,22 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
     struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
 
     if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
         switch (errno) {
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
     switch (status) {
-      case TUNA_DISCONNECTED:
+      case TUNA_DISCONNECTED:;
         ifr.ifr_flags &= ~IFF_UP;
         break;
-      case TUNA_CONNECTED:
+      case TUNA_CONNECTED:;
         ifr.ifr_flags |= IFF_UP;
         break;
     }
@@ -447,7 +451,7 @@ tuna_set_status(tuna_device_t const *device, tuna_status_t status) {
         switch (errno) {
           case EPERM:;
             return TUNA_NOT_PERMITTED;
-          default:
+          default:;
             return TUNA_UNEXPECTED;
         }
     }
