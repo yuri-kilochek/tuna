@@ -46,6 +46,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(PkgConfig REQUIRED)
     pkg_check_modules(libnl REQUIRED IMPORTED_TARGET
         libnl-3.0
+        libnl-route-3.0
     )
     target_link_libraries(tuna PRIVATE
         PkgConfig::libnl

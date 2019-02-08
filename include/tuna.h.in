@@ -97,9 +97,9 @@ tuna_get_error_name(tuna_error_t error);
 
 typedef struct {
     #if TUNA_PRIV_OS_LINUX
+        struct nl_sock *priv_nl_sock;
         int priv_fd;
         int priv_ifindex;
-        struct nl_sock *priv_nl_sock;
     #endif
 } tuna_device_t;
 

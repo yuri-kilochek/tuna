@@ -22,23 +22,24 @@ int main() {
     };
     std::cout << "created interface " << std::flush;
 
-    //std::string name;
-    //name.resize(name.capacity());
-    //retry_get_name: {
-    //    std::size_t length = name.size();
-    //    switch (auto e = tuna_get_name(&device, name.data(), &length)) {
-    //      case 0:
-    //      case TUNA_NAME_TOO_LONG:
-    //        name.resize(length);
-    //        if (!e) { break; }
-    //        goto retry_get_name;
-    //      default:
-    //        std::cerr << "tuna_get_name failed: " << tuna_get_error_name(e)
-    //                  << " : " << errno << " " << strerror(errno) <<"\n";
-    //        return EXIT_FAILURE;
-    //    }
-    //}
-    //std::cout << "named " << name << std::endl;
+    std::string name;
+    name.resize(name.capacity());
+    retry_get_name: {
+        std::size_t length = name.size() + 1;
+        switch (auto e = tuna_get_name(&device, name.data(), &length)) {
+          case 0:
+            name.resize(length);
+            break;
+          case TUNA_NAME_TOO_LONG:
+            name.resize(length - 1);
+            goto retry_get_name;
+          default:
+            std::cerr << "tuna_get_name failed: " << tuna_get_error_name(e)
+                      << " : " << errno << " " << strerror(errno) <<"\n";
+            return EXIT_FAILURE;
+        }
+    }
+    std::cout << "named " << name << std::endl;
 
     //switch (auto e = tuna_set_status(&device, TUNA_CONNECTED)) {
     //  case 0:
@@ -49,17 +50,17 @@ int main() {
     //    return EXIT_FAILURE;
     //}
 
-    //std::string new_name = "footun";
-    //size_t new_name_length = new_name.size();
-    //switch (auto e = tuna_set_name(&device, new_name.data(), &new_name_length)) {
-    //  case 0:
-    //    break;
-    //  default:
-    //    std::cerr << "tuna_set_name failed: " << tuna_get_error_name(e)
-    //              << " : " << errno << " " << strerror(errno) <<"\n";
-    //    return EXIT_FAILURE;
-    //}
-    //std::cout << "renamed to " << new_name << std::endl;
+    std::string new_name = "footun";
+    size_t new_name_length = new_name.size();
+    switch (auto e = tuna_set_name(&device, new_name.data(), &new_name_length)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_set_name failed: " << tuna_get_error_name(e)
+                  << " : " << errno << " " << strerror(errno) <<"\n";
+        return EXIT_FAILURE;
+    }
+    std::cout << "renamed to " << new_name << std::endl;
 
 
     //uint_least8_t addr[] = {20, 30, 40, 50};

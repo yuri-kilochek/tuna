@@ -18,35 +18,18 @@
 #include <linux/netlink.h>
 #include <linux/rtnetlink.h>
 #include <netinet/in.h>
-#include <netlink/netlink.h>
+#include <netlink/socket.h>
+#include <netlink/route/link.h>
 
 // TODO: delete
 #include <stdio.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
-/*
-#define TUNA_PRIV_TRY(...) \
-    for (tuna_error_t tuna_priv_try_error_##__LINE__ = (__VA_ARGS__); \
-         tuna_priv_try_error_##__LINE__; ) \
-    for (int tuna_priv_try_state_##__LINE__ = 0; 1; \
-         tuna_priv_try_state_##__LINE__ = 1) \
-    if (tuna_priv_try_state_##__LINE__) { \
-        return tuna_priv_try_error_##__LINE__; \
-    } else
-
-#define TUNA_PRIV_FREEZE_ERRNO \
-    for (int tuna_priv_frozen_errno_##__LINE__ = errno, \
-             tuna_priv_freeze_errno_state_##__LINE__ = 1; \
-         tuna_priv_freeze_errno_state_##__LINE__; \
-         (errno = tuna_priv_frozen_errno_##__LINE__), \
-         tuna_priv_freeze_errno_state_##__LINE__ = 0)
-*/
-
 static
 tuna_error_t
-tuna_priv_xlate_err(int num) {
-    switch (num) {
+tuna_priv_xlate_errstd(int err) {
+    switch (err) {
       case 0:
         return 0;
       case ENOMEM:;
@@ -64,8 +47,8 @@ tuna_priv_xlate_err(int num) {
 
 static
 tuna_error_t
-tuna_priv_xlate_nlerr(int num) {
-    switch (num) {
+tuna_priv_xlate_errnl(int err) {
+    switch (err) {
       case 0:
         return 0;
       case NLE_NOMEM:;
@@ -77,171 +60,173 @@ tuna_priv_xlate_nlerr(int num) {
     }
 }
 
+static
 tuna_error_t
-tuna_create(tuna_device_t *device) {
-    assert(device);
+tuna_priv_get_rtnl_link(tuna_device_t const *dev,
+                        struct rtnl_link **rtnl_link)
+{
+    int err = rtnl_link_get_kernel(dev->priv_nl_sock,
+                                   dev->priv_ifindex, NULL, rtnl_link);
+    return tuna_priv_xlate_errnl(-err);
+}
 
-    struct nl_sock *nl_sock = nl_socket_alloc();
-    if (!nl_sock) { return tuna_priv_xlate_err(errno); }
+tuna_error_t
+tuna_create(tuna_device_t *dev) {
+    assert(dev);
 
-    int nlerrnum = nl_connect(nl_sock, NETLINK_ROUTE);
-    if (nlerrnum) {
-        nl_socket_free(nl_sock);
-        return tuna_priv_xlate_nlerr(-nlerrnum);
+    dev->priv_nl_sock = NULL;
+    dev->priv_fd = -1;
+    struct rtnl_link *rtnl_link = NULL;
+
+    int err;
+
+    if (!(dev->priv_nl_sock = nl_socket_alloc())) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+
+    if ((err = nl_connect(dev->priv_nl_sock, NETLINK_ROUTE))) {
+        err = tuna_priv_xlate_errnl(-err);
+        goto fail;
     }
 
   open:;
-    int fd = open("/dev/net/tun", O_RDWR);
-    if (fd == -1) {
-        tuna_error_t error = tuna_priv_xlate_err(errno);
-
-        nl_socket_free(nl_sock);
-
-        return error;
+    if ((dev->priv_fd = open("/dev/net/tun", O_RDWR)) == -1) {
+        err = tuna_priv_xlate_errstd(errno);
+        goto fail;
     }
 
-    struct ifreq ifr = {.ifr_flags = IFF_TUN | IFF_NO_PI};
-    if (ioctl(fd, TUNSETIFF, &ifr) == -1) {
-        tuna_error_t error = tuna_priv_xlate_err(errno);
-
-        close(fd);
-        nl_socket_free(nl_sock);
-
-        return error;
+    struct ifreq ifreq = {.ifr_flags = IFF_TUN | IFF_NO_PI};
+    if (ioctl(dev->priv_fd, TUNSETIFF, &ifreq) == -1) {
+        err = tuna_priv_xlate_errstd(errno);
+        goto fail;
     }
 
-    if (ioctl(nl_socket_get_fd(nl_sock), SIOCGIFINDEX, &ifr) == -1) {
-        if (errno == ENODEV) {
-            close(fd);
+    if ((err = rtnl_link_get_kernel(dev->priv_nl_sock,
+                                    0, ifreq.ifr_name, &rtnl_link)))
+    {
+        if (err == -NLE_NODEV) {
+            close(dev->priv_fd);
+            dev->priv_fd - 1;
             goto open;
         }
-        tuna_error_t error = tuna_priv_xlate_err(errno);
-
-        close(fd);
-        nl_socket_free(nl_sock);
-
-        return error;
+        err = tuna_priv_xlate_errnl(-err);
+        goto fail;
     }
+    dev->priv_ifindex = rtnl_link_get_ifindex(rtnl_link);
 
-    device->priv_fd = fd;
-    device->priv_ifindex = ifr.ifr_ifindex;
-    device->priv_nl_sock = nl_sock;
+    err = 0;
+  done:;
+    if (rtnl_link) { rtnl_link_put(rtnl_link); }
+    return err;
 
-    return 0;
+  fail:;
+    if (dev->priv_fd != -1) { close(dev->priv_fd); }
+    if (dev->priv_nl_sock) { nl_socket_free(dev->priv_nl_sock); }
+    goto done;
 }
 
 void
-tuna_destroy(tuna_device_t *device) {
-    assert(device);
+tuna_destroy(tuna_device_t *dev) {
+    assert(dev);
 
-    nl_socket_free(device->priv_nl_sock);
-    close(device->priv_fd);
+    close(dev->priv_fd);
+    nl_socket_free(dev->priv_nl_sock);
 }
 
 
 tuna_handle_t
-tuna_get_handle(tuna_device_t const *device) {
-    assert(device);
+tuna_get_handle(tuna_device_t const *dev) {
+    assert(dev);
 
-    return device->priv_fd;
+    return dev->priv_fd;
 }
 
 
-//tuna_error_t
-//tuna_get_name(tuna_device_t const *device, char *name, size_t *length) {
-//    assert(device);
-//    assert(name);
-//    assert(length);
-//
-//    struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
-//    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
-//        switch (errno) {
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//    size_t raw_length = strnlen(ifr.ifr_name, sizeof(ifr.ifr_name));
-//    if (*length > raw_length) { *length = raw_length; }
-//    memcpy(name, ifr.ifr_name, *length);
-//    name[*length] = '\0';
-//    if (*length < raw_length) {
-//        *length = raw_length;
-//        return TUNA_NAME_TOO_LONG;
-//    }
-//
-//    return 0;
-//}
-//
-//tuna_error_t
-//tuna_set_name(tuna_device_t *device, char const *name, size_t *length) {
-//    assert(device);
-//    assert(name);
-//    assert(length);
-//
-//    if (*length >= IFNAMSIZ) {
-//        *length = IFNAMSIZ - 1;
-//        return TUNA_NAME_TOO_LONG;
-//    }
-//
-//    struct ifreq ifr = {.ifr_ifindex = device->priv_ifindex};
-//    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFNAME, &ifr) == -1) {
-//        switch (errno) {
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//
-//    if (!ifr.ifr_name[*length] && !memcmp(name, ifr.ifr_name, *length)) {
-//        return 0;
-//    }
-//
-//    if (ioctl(device->priv_rtnl_sockfd, SIOCGIFFLAGS, &ifr) == -1) {
-//        switch (errno) {
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//    short flags = ifr.ifr_flags;
-//    if (flags & IFF_UP) {
-//        ifr.ifr_flags = flags & ~IFF_UP;
-//        if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
-//            switch (errno) {
-//              case EPERM:;
-//                return TUNA_NOT_PERMITTED;
-//              default:;
-//                return TUNA_UNEXPECTED;
-//            }
-//        }
-//    }
-//
-//    memcpy(ifr.ifr_newname, name, *length);
-//    ifr.ifr_newname[*length] = '\0';
-//    if (ioctl(device->priv_rtnl_sockfd, SIOCSIFNAME, &ifr) == -1) {
-//        switch (errno) {
-//          case EPERM:;
-//            return TUNA_NOT_PERMITTED;
-//          case EEXIST:;
-//            return TUNA_NAME_IN_USE;
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//    memcpy(ifr.ifr_name, name, *length);
-//    ifr.ifr_name[*length] = '\0';
-//
-//    if (flags & IFF_UP) {
-//        ifr.ifr_flags = flags;
-//        if (ioctl(device->priv_rtnl_sockfd, SIOCSIFFLAGS, &ifr) == -1) {
-//            switch (errno) {
-//              default:;
-//                return TUNA_UNEXPECTED;
-//            }
-//        }
-//    }
-//
-//    return 0;
-//}
-//
+tuna_error_t
+tuna_get_name(tuna_device_t const *dev, char *name, size_t *len) {
+    assert(dev);
+    assert(name);
+    assert(len);
+    assert(*len > 0);
+
+    struct rtnl_link *rtnl_link = NULL;
+
+    int err;
+
+    if ((err = tuna_priv_get_rtnl_link(dev, &rtnl_link))) {
+        goto fail;
+    }
+
+    char *raw_name = rtnl_link_get_name(rtnl_link);
+    size_t raw_len = strlen(raw_name);
+
+    if (*len <= raw_len) {
+        memcpy(name, raw_name, *len - 1);
+        name[*len - 1] = '\0';
+        *len = raw_len + 1;
+        err = TUNA_NAME_TOO_LONG;
+        goto fail;
+    }
+
+    memcpy(name, raw_name, raw_len + 1);
+    *len = raw_len;
+
+    err = 0;
+  done:;
+    if (rtnl_link) { rtnl_link_put(rtnl_link); }
+    return err;
+
+  fail:
+    goto done;
+}
+
+tuna_error_t
+tuna_set_name(tuna_device_t *dev, char const *name, size_t *len) {
+    assert(dev);
+    assert(name);
+    assert(len);
+
+    if (*len >= IFNAMSIZ) {
+        *len = IFNAMSIZ - 1;
+        return TUNA_NAME_TOO_LONG;
+    }
+
+    struct rtnl_link *rtnl_link = NULL;
+    struct rtnl_link *rtnl_link_patch = NULL;
+
+    int err;
+
+    if ((err = tuna_priv_get_rtnl_link(dev, &rtnl_link))) {
+        goto fail;
+    }
+
+    if (!(rtnl_link_patch = rtnl_link_alloc())) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+    char namez[IFNAMSIZ];
+    memcpy(namez, name, *len);
+    namez[*len] = '\0';
+    rtnl_link_set_name(rtnl_link_patch, namez);
+
+    if ((err = rtnl_link_change(dev->priv_nl_sock,
+                                rtnl_link, rtnl_link_patch, 0)))
+    {
+        err = tuna_priv_xlate_errnl(-err);
+        goto fail;
+    }
+
+    err = 0;
+  done:;
+    if (rtnl_link_patch) { rtnl_link_put(rtnl_link_patch); }
+    if (rtnl_link) { rtnl_link_put(rtnl_link); }
+    return err;
+
+  fail:
+    goto done;
+}
+
 //static
 //tuna_error_t
 //tuna_priv_get_now(struct timeval *tv) {
