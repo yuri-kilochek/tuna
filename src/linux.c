@@ -3,21 +3,16 @@
 #if TUNA_PRIV_OS_LINUX
 ///////////////////////////////////////////////////////////////////////////////
 
-#include <time.h>
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
 
 #include <fcntl.h>
 #include <unistd.h>
-#include <sys/time.h>
 #include <sys/ioctl.h>
-#include <sys/socket.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
-#include <linux/netlink.h>
-#include <linux/rtnetlink.h>
-#include <netinet/in.h>
+//#include <netinet/in.h>
 #include <netlink/socket.h>
 #include <netlink/route/link.h>
 
@@ -28,7 +23,7 @@
 
 static
 tuna_error_t
-tuna_priv_xlate_errstd(int err) {
+tuna_priv_xlate_posix_err(int err) {
     switch (err) {
       case 0:
         return 0;
@@ -47,7 +42,7 @@ tuna_priv_xlate_errstd(int err) {
 
 static
 tuna_error_t
-tuna_priv_xlate_errnl(int err) {
+tuna_priv_xlate_libnl_err(int err) {
     switch (err) {
       case 0:
         return 0;
@@ -67,7 +62,7 @@ tuna_priv_get_rtnl_link(tuna_device_t const *dev,
 {
     int err = rtnl_link_get_kernel(dev->priv_nl_sock,
                                    dev->priv_ifindex, NULL, rtnl_link);
-    return tuna_priv_xlate_errnl(-err);
+    return tuna_priv_xlate_libnl_err(-err);
 }
 
 tuna_error_t
@@ -86,19 +81,19 @@ tuna_create(tuna_device_t *dev) {
     }
 
     if ((err = nl_connect(dev->priv_nl_sock, NETLINK_ROUTE))) {
-        err = tuna_priv_xlate_errnl(-err);
+        err = tuna_priv_xlate_libnl_err(-err);
         goto fail;
     }
 
   open:;
     if ((dev->priv_fd = open("/dev/net/tun", O_RDWR)) == -1) {
-        err = tuna_priv_xlate_errstd(errno);
+        err = tuna_priv_xlate_posix_err(errno);
         goto fail;
     }
 
     struct ifreq ifreq = {.ifr_flags = IFF_TUN | IFF_NO_PI};
     if (ioctl(dev->priv_fd, TUNSETIFF, &ifreq) == -1) {
-        err = tuna_priv_xlate_errstd(errno);
+        err = tuna_priv_xlate_posix_err(errno);
         goto fail;
     }
 
@@ -107,10 +102,9 @@ tuna_create(tuna_device_t *dev) {
     {
         if (err == -NLE_NODEV) {
             close(dev->priv_fd);
-            dev->priv_fd - 1;
             goto open;
         }
-        err = tuna_priv_xlate_errnl(-err);
+        err = tuna_priv_xlate_libnl_err(-err);
         goto fail;
     }
     dev->priv_ifindex = rtnl_link_get_ifindex(rtnl_link);
@@ -154,9 +148,7 @@ tuna_get_name(tuna_device_t const *dev, char *name, size_t *len) {
 
     int err;
 
-    if ((err = tuna_priv_get_rtnl_link(dev, &rtnl_link))) {
-        goto fail;
-    }
+    if ((err = tuna_priv_get_rtnl_link(dev, &rtnl_link))) { goto fail; }
 
     char *raw_name = rtnl_link_get_name(rtnl_link);
     size_t raw_len = strlen(raw_name);
@@ -197,9 +189,7 @@ tuna_set_name(tuna_device_t *dev, char const *name, size_t *len) {
 
     int err;
 
-    if ((err = tuna_priv_get_rtnl_link(dev, &rtnl_link))) {
-        goto fail;
-    }
+    if ((err = tuna_priv_get_rtnl_link(dev, &rtnl_link))) { goto fail; }
 
     if (!(rtnl_link_patch = rtnl_link_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
@@ -213,7 +203,7 @@ tuna_set_name(tuna_device_t *dev, char const *name, size_t *len) {
     if ((err = rtnl_link_change(dev->priv_nl_sock,
                                 rtnl_link, rtnl_link_patch, 0)))
     {
-        err = tuna_priv_xlate_errnl(-err);
+        err = tuna_priv_xlate_libnl_err(-err);
         goto fail;
     }
 
@@ -227,111 +217,6 @@ tuna_set_name(tuna_device_t *dev, char const *name, size_t *len) {
     goto done;
 }
 
-//static
-//tuna_error_t
-//tuna_priv_get_now(struct timeval *tv) {
-//    struct timespec ts;
-//    if (clock_gettime(CLOCK_MONOTONIC_RAW, &ts) == -1) {
-//        switch (errno) {
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//    tv->tv_sec = ts.tv_sec;
-//    tv->tv_usec = ts.tv_nsec / 1000;
-//    return 0;
-//}
-//
-//
-//static
-//tuna_error_t
-//tuna_priv_exchange(tuna_device_t *device,
-//                   struct nlmsghdr *req, struct nlmsghdr *res)
-//{
-//    req->nlmsg_flags |= NLM_F_REQUEST | NLM_F_ACK;
-//
-//  send:;
-//    struct sockaddr_nl snl = {AF_NETLINK};
-//    req->nlmsg_seq = device->priv_nlmsg_seq++;
-//    ssize_t out_len = sendmsg(device->priv_rtnl_sockfd, &(struct msghdr) {
-//        .msg_name = &snl,
-//        .msg_namelen = sizeof(snl),
-//        .msg_iov = &(struct iovec){req, req->nlmsg_len},
-//        .msg_iovlen = 1,
-//    }, 0);
-//    if (out_len == -1) {
-//        switch (errno) {
-//          case EINTR:;
-//            goto send;
-//          case ENOMEM:;
-//          case ENOBUFS:;
-//            return TUNA_OUT_OF_MEMORY;
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//    assert(out_len == req->nlmsg_len);
-//
-//    static struct timeval const max_delay = {0, 500000};
-//    struct timeval timeout;
-//    TUNA_PRIV_TRY(tuna_priv_get_now(&timeout));
-//    timeradd(&timeout, &max_delay, &timeout);
-//
-//  recv:;
-//    struct timeval delay;
-//    TUNA_PRIV_TRY(tuna_priv_get_now(&delay));
-//    if (timercmp(&delay, &timeout, >=)) { goto send; }
-//    timersub(&delay, &timeout, &delay);
-//    if (setsockopt(device->priv_rtnl_sockfd, SOL_SOCKET,
-//                   SO_RCVTIMEO, &delay, sizeof(delay)) == -1)
-//    {
-//        switch (errno) {
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//
-//    ssize_t in_len = recvmsg(device->priv_rtnl_sockfd, &(struct msghdr){
-//        .msg_name = &snl,
-//        .msg_namelen = sizeof(snl),
-//        .msg_iov = &(struct iovec){res, res->nlmsg_len},
-//        .msg_iovlen = 1,
-//    }, 0);
-//    if (in_len == -1) {
-//        switch (errno) {
-//          case EAGAIN:;
-//          #if EWOULDBLOCK != EAGAIN
-//            case EWOULDBLOCK:;
-//          #endif
-//            goto send;
-//          case EINTR:;
-//            goto recv;
-//          case ENOMEM:;
-//          case ENOBUFS:;
-//            return TUNA_OUT_OF_MEMORY;
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//
-//    if (snl.nl_pid != 0) { goto recv; }
-//
-//    for (struct nlmsghdr *nlmsg = res;
-//         NLMSG_OK(nlmsg, in_len);
-//         nlmsg = NLMSG_NEXT(nlmsg, in_len))
-//    {
-//        if (nlmsg->nlmsg_flags & NLM_F_REQUEST) { continue; }
-//        assert(!(res->nlmsg_flags & NLM_F_MULTI));
-//        if (nlmsg->nlmsg_type == NLMSG_NOOP) { continue; }
-//        if (nlmsg->nlmsg_seq != req->nlmsg_seq) { continue; }
-//
-//        memmove(res, nlmsg, nlmsg->nlmsg_len);
-//
-//        return 0;
-//    }
-//    goto recv;
-//}
-//
 //tuna_error_t
 //tuna_set_ip4_address(tuna_device_t *device,
 //                     uint_least8_t const octets[4],
