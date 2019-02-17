@@ -20,7 +20,6 @@ class TunaConan(ConanFile):
     )
     exports_sources = (
         'CMakeLists.txt',
-        'cmake/*',
         'include/*',
         'src/*',
     )

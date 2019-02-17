@@ -5,23 +5,28 @@
 char const*
 tuna_get_error_name(tuna_error err) {
     switch (err) {
-      #define TUNA_PRIV_DEFINE_ERROR_NAME(value, name) \
-        case value:; \
-          return name; \
-      /**/
-
-      TUNA_PRIV_DEFINE_ERROR_NAME(0                    , "none"            )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_UNEXPECTED      , "unexpected"      )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_DEVICE_LOST     , "device lost"     )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_FORBIDDEN       , "forbidden"       )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_OUT_OF_MEMORY   , "out of memory"   )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_TOO_MANY_HANDLES, "too many handles")
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_TOO_LONG_NAME   , "too long name"   )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_DUPLICATE_NAME  , "duplicate name"  )
-      TUNA_PRIV_DEFINE_ERROR_NAME(TUNA_INVALID_NAME    , "invalid name"    )
-
-      #undef TUNA_PRIV_DEFINE_ERROR_NAME
-
+      case 0:;
+        return "none";
+      case TUNA_UNEXPECTED:;
+        return "unexpected";
+      case TUNA_DEVICE_LOST:;
+        return "device lost";
+      case TUNA_FORBIDDEN:;
+        return "forbidden";
+      case TUNA_OUT_OF_MEMORY:;
+        return "out of memory";
+      case TUNA_TOO_MANY_HANDLES:;
+        return "too many handles";
+      case TUNA_NAME_TOO_LONG:;
+        return "name too long";
+      case TUNA_DUPLICATE_NAME:;
+        return "duplicate name";
+      case TUNA_INVALID_NAME:;
+        return "invalid name";
+      case TUNA_MTU_TOO_SMALL:;
+        return "mtu too small";
+      case TUNA_MTU_TOO_BIG:;
+        return "mtu too big";
       default:;
         return NULL;
     }

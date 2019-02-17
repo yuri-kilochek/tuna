@@ -41,6 +41,25 @@ int main() {
     }
     std::cout << "renamed to " << new_name << std::endl;
 
+    std::size_t mtu;
+    switch (auto e = tuna_get_mtu(device, &mtu)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_get_mtu failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
+    std::cout << "mtu is " << mtu << std::endl;
+
+    std::size_t new_mtu = 2000;
+    switch (auto e = tuna_set_mtu(device, new_mtu)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_set_mtu failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
+    std::cout << "changed mtu to " << new_mtu << std::endl;
 
     //uint_least8_t addr[] = {20, 30, 40, 50};
     //switch (auto e = tuna_set_ip4_address(&device, addr, 24)) {
