@@ -8,19 +8,19 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#if defined(linux) \
- || defined(__linux) \
- || defined(__linux__) \
- || defined(__gnu_linux__)
-    #define TUNA_PRIV_OS_LINUX 1
-#endif
-
 #if defined(_WIN32) \
  || defined(_WIN64) \
  || defined(__WIN32__) \
  || defined(__TOS_WIN__) \
  || defined(__WINDOWS__)
     #define TUNA_PRIV_OS_WINDOWS 1
+#elif defined(linux) \
+   || defined(__linux) \
+   || defined(__linux__) \
+   || defined(__gnu_linux__)
+    #define TUNA_PRIV_OS_LINUX 1
+#else
+    #error "Target OS not supported."
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -28,6 +28,7 @@
 #if defined(TUNA_IMPORT) && defined(TUNA_EXPORT)
     #error "TUNA_IMPORT and TUNA_EXPORT must not be defined simultaneously."
 #endif
+
 #if TUNA_PRIV_OS_WINDOWS
     #if defined(TUNA_IMPORT)
         #define TUNA_PRIV_API __declspec(dllimport)
@@ -37,7 +38,7 @@
         #define TUNA_PRIV_API 
     #endif
 #else
-    #if defined(TUNA_EXPORT)
+    #if defined(TUNA_EXPORT) || defined(TUNA_IMPORT)
         #define TUNA_PRIV_API __attribute__((visibility("default")))
     #else
         #define TUNA_PRIV_API 
@@ -50,7 +51,7 @@ extern "C" {
 #endif
 ///////////////////////////////////////////////////////////////////////////////
 
-typedef uint_least32_t tuna_version_t;
+typedef uint_least32_t tuna_version;
 
 #define TUNA_COMPOSE_VERSION(major, minor, patch) \
     ((major) << UINT32_C(20) | (minor) << UINT32_C(10) | (patch))
@@ -62,119 +63,133 @@ typedef uint_least32_t tuna_version_t;
 #define TUNA_GET_PATCH_VERSION(version) \
     ((version) & UINT32_C(0x3FF))
 
-#define TUNA_HEADER_VERSION \
+#define TUNA_INCLUDED_VERSION \
     TUNA_COMPOSE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION})
 
-TUNA_PRIV_API
-tuna_version_t
-tuna_get_actual_version(void);
+TUNA_PRIV_API extern
+tuna_version const tuna_linked_version;
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#define TUNA_PRIV_ENUMERATE_ERRORS(yield) \
-    yield(UNEXPECTED       , unexpected    ) \
-    yield(OUT_OF_MEMORY    , out_of_memory ) \
-    yield(OUT_OF_HANDLES   , ouf_of_handles) \
-    yield(NOT_PERMITTED    , not_permitted ) \
-    yield(NAME_TOO_LONG    , name_too_long ) \
-    yield(NAME_IN_USE      , name_in_use   ) \
-/**/
-
-typedef enum {
-    TUNA_PRIV_NO_ERROR,
-
-    #define TUNA_PRIV_DECLARE_ERROR(upper_name, lower_name) TUNA_##upper_name,
-    TUNA_PRIV_ENUMERATE_ERRORS(TUNA_PRIV_DECLARE_ERROR)
-    #undef TUNA_PRIV_DECLARE_ERROR
-} tuna_error_t;
+typedef enum tuna_error {
+    TUNA_UNEXPECTED = 1,
+    TUNA_DEVICE_LOST,
+    TUNA_FORBIDDEN,
+    TUNA_OUT_OF_MEMORY,
+    TUNA_TOO_MANY_HANDLES,
+    TUNA_NAME_TOO_LONG,
+    TUNA_DUPLICATE_NAME,
+    TUNA_INVALID_NAME,
+    TUNA_MTU_TOO_SMALL,
+    TUNA_MTU_TOO_BIG,
+} tuna_error;
 
 TUNA_PRIV_API
 char const*
-tuna_get_error_name(tuna_error_t error);
+tuna_get_error_name(tuna_error error);
+
+///////////////////////////////////////////////////////////////////////////////
+
+typedef struct tuna_device tuna_device;
+
+TUNA_PRIV_API
+tuna_error
+tuna_create_device(tuna_device **device);
+
+TUNA_PRIV_API
+void
+tuna_destroy_device(tuna_device *device);
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #if TUNA_PRIV_OS_WINDOWS
-    typedef void *tuna_native_handle_t;
-    #define TUNA_PRIV_NATIVE_HANDLE_NAME priv_handle
+    typedef void *tuna_io_handle;
 #else
-    typedef int tuna_native_handle_t;
-    #define TUNA_PRIV_NATIVE_HANDLE_NAME priv_fd
+    typedef int tuna_io_handle;
 #endif
 
-typedef struct {
-    tuna_native_handle_t TUNA_PRIV_NATIVE_HANDLE_NAME;
-    #if TUNA_PRIV_OS_LINUX
-        int priv_ifindex;
-        int priv_rtnl_sockfd;
-        uint32_t priv_nlmsg_seq;
-    #endif
-} tuna_device_t;
+TUNA_PRIV_API
+tuna_io_handle
+tuna_get_io_handle(tuna_device const *device);
 
+///////////////////////////////////////////////////////////////////////////////
+
+typedef enum tuna_status {
+    TUNA_DISABLED,
+    TUNA_ENABLED,
+} tuna_status;
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_create(tuna_device_t *device);
+tuna_error
+tuna_get_status(tuna_device const *device, tuna_status *status);
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_destroy(tuna_device_t *device);
+tuna_error
+tuna_set_status(tuna_device *device, tuna_status status);
 
-
-static inline
-tuna_native_handle_t
-tuna_get_native_handle(tuna_device_t const *device) {
-    return device->TUNA_PRIV_NATIVE_HANDLE_NAME;
-}
-
+///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_get_name(tuna_device_t const *device, char *name, size_t *length);
+tuna_error
+tuna_get_ifindex(tuna_device const *device, int *index);
+
+///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_set_name(tuna_device_t *device, char const *name, size_t *length);
-
-
-TUNA_PRIV_API
-tuna_error_t
-tuna_get_ip4_address(tuna_device_t const *device,
-                     uint_least8_t octets[4],
-                     uint_least8_t *prefix_length);
+tuna_error
+tuna_get_name(tuna_device const *device, char const **name);
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_set_ip4_address(tuna_device_t *device,
-                     uint_least8_t const octets[4],
-                     uint_least8_t prefix_length);
+tuna_error
+tuna_set_name(tuna_device *device, char const *name);
 
-
-TUNA_PRIV_API
-tuna_error_t
-tuna_get_ip6_address(tuna_device_t const *device,
-                     uint_least16_t hextets[8],
-                     uint_least8_t *prefix_length);
+///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_set_ip6_address(tuna_device_t *device,
-                     uint_least16_t const hextets[8],
-                     uint_least8_t prefix_length);
-
-
-typedef enum {
-    TUNA_DISCONNECTED,
-    TUNA_CONNECTED,
-} tuna_status_t;
+tuna_error
+tuna_get_mtu(tuna_device const *device, size_t *mtu);
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_get_status(tuna_device_t const *device, tuna_status_t *status);
+tuna_error
+tuna_set_mtu(tuna_device *device, size_t mtu);
+
+///////////////////////////////////////////////////////////////////////////////
+
+typedef struct tuna_ip4_address {
+    uint_least8_t octets[4];
+    uint_least8_t prefix_length;
+} tuna_ip4_address;
+
+typedef struct tuna_ip6_address {
+    uint_least16_t hextets[8];
+    uint_least8_t prefix_length;
+} tuna_ip6_address;
+
+typedef enum tuna_address_family {
+    TUNA_IP4 = 1,
+    TUNA_IP6,
+} tuna_address_family;
+
+typedef struct tuna_address {
+    tuna_address_family family;
+    union {
+        tuna_ip4_address ip4;
+        tuna_ip6_address ip6;
+    };
+} tuna_address;
 
 TUNA_PRIV_API
-tuna_error_t
-tuna_set_status(tuna_device_t const *device, tuna_status_t status);
+tuna_error
+tuna_get_addresses(tuna_device const *device,
+                   tuna_address const **addresses, size_t *count);
+
+TUNA_PRIV_API
+tuna_error
+tuna_add_address(tuna_device *device, tuna_address const *address);
+
+TUNA_PRIV_API
+tuna_error
+tuna_remove_address(tuna_device *device, tuna_address const *address);
 
 ///////////////////////////////////////////////////////////////////////////////
 #if __cplusplus
