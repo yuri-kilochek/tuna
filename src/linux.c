@@ -15,6 +15,7 @@
 //#include <netinet/in.h>
 #include <netlink/socket.h>
 #include <netlink/route/link.h>
+#include <netlink/route/addr.h>
 
 // TODO: delete
 #include <stdio.h>
@@ -25,7 +26,7 @@ struct tuna_device {
     struct nl_sock *nl_sock;
     int fd; int ifindex;
     char name[IFNAMSIZ];
-    tuna_address *addrs; size_t addr_cnt;
+    tuna_address *addrs;
 };
 
 static
@@ -65,25 +66,25 @@ tuna_priv_translate_nlerr(int err) {
 }
 
 tuna_error
-tuna_create_device(tuna_device **dev) {
+tuna_create_device(tuna_device **device) {
     struct rtnl_link *rtnl_link;
 
     int err = 0;
 
-    tuna_device *d = malloc(sizeof(*d));
-    if (!d) {
+    tuna_device *dev = malloc(sizeof(*dev));
+    if (!dev) {
         err = TUNA_OUT_OF_MEMORY;
         goto fail;
     }
-    *d = (tuna_device){.fd = -1};
+    *dev = (tuna_device){.fd = -1};
 
-    if (!(d->nl_sock = nl_socket_alloc())) {
+    if (!(dev->nl_sock = nl_socket_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
         goto fail;
     }
 
     errno = 0;
-    switch ((err = nl_connect(d->nl_sock, NETLINK_ROUTE))) {
+    switch ((err = nl_connect(dev->nl_sock, NETLINK_ROUTE))) {
       case 0:;
         break;
       case -NLE_FAILURE:;
@@ -93,41 +94,42 @@ tuna_create_device(tuna_device **dev) {
             err = TUNA_TOO_MANY_HANDLES;
             goto fail;
         }
+        /* fallthrough */
       default:;
         err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }
 
   open:;
-    if ((d->fd = open("/dev/net/tun", O_RDWR)) == -1) {
+    if ((dev->fd = open("/dev/net/tun", O_RDWR)) == -1) {
         err = tuna_priv_translate_syserr(errno);
         goto fail;
     }
 
     struct ifreq ifreq = {.ifr_flags = IFF_TUN | IFF_NO_PI};
-    if (ioctl(d->fd, TUNSETIFF, &ifreq) == -1) {
+    if (ioctl(dev->fd, TUNSETIFF, &ifreq) == -1) {
         err = tuna_priv_translate_syserr(errno);
         goto fail;
     }
 
-    if ((err = rtnl_link_get_kernel(d->nl_sock,
+    if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     0, ifreq.ifr_name, &rtnl_link)))
     {
         if (err == -NLE_OBJ_NOTFOUND) {
-            close(d->fd);
+            close(dev->fd);
             goto open;
         }
         err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }
-    d->ifindex = rtnl_link_get_ifindex(rtnl_link);
+    dev->ifindex = rtnl_link_get_ifindex(rtnl_link);
 
-    *dev = d;
+    *device = dev;
   done:;
     rtnl_link_put(rtnl_link);
     return err;
   fail:;
-    tuna_destroy_device(d);
+    tuna_destroy_device(dev);
     goto done;
 }
 
@@ -223,7 +225,9 @@ tuna_get_ifindex(tuna_device const *dev, int *index) {
 }
 
 tuna_error
-tuna_get_name(tuna_device const *dev, char const **name) {
+tuna_get_name(tuna_device const *device, char const **name) {
+    tuna_device *dev = (void *)device;
+
     struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;
@@ -235,7 +239,7 @@ tuna_get_name(tuna_device const *dev, char const **name) {
         goto fail;
     }
 
-    strcpy(((tuna_device *)dev)->name, rtnl_link_get_name(rtnl_link));
+    strcpy(dev->name, rtnl_link_get_name(rtnl_link));
     *name = dev->name;
 
   done:;
@@ -366,6 +370,96 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
     rtnl_link_put(rtnl_link);
     return err;
   fail:;
+    goto done;
+}
+
+tuna_error
+tuna_get_addresses(tuna_device const *device,
+                   tuna_address const **addrs, size_t *count)
+{
+    tuna_device *dev = (void *)device;
+
+    struct nl_cache *nl_cache = NULL;
+
+    int err = 0;
+
+    if ((err = rtnl_addr_alloc_cache(dev->nl_sock, &nl_cache))) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+    size_t cnt = nl_cache_nitems(nl_cache);
+
+    free(dev->addrs);
+    if (!(dev->addrs = malloc(cnt * sizeof(*dev->addrs)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+
+    tuna_address *addr = dev->addrs;
+    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
+         nl_object; nl_object = nl_cache_get_next(nl_object))
+    {
+        struct rtnl_addr *rtnl_addr = (void *)nl_object;
+        
+        if (rtnl_addr_get_ifindex(rtnl_addr) != dev->ifindex) { continue; }
+
+        struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
+        if (!nl_addr) { continue; }
+
+        struct sockaddr_storage sockaddr;
+        socklen_t socklen = sizeof(sockaddr);
+        if ((err = nl_addr_fill_sockaddr(nl_addr,
+                                         (void *)&sockaddr, &socklen)))
+        {
+            err = tuna_priv_translate_nlerr(-err);
+            goto fail;
+        }
+
+        switch (sockaddr.ss_family) {
+          case AF_INET:;
+            struct sockaddr_in *sockaddr_in = (void *)&sockaddr;
+            uint32_t saddr = sockaddr_in->sin_addr.s_addr;
+            tuna_ip4_address *ip4addr = &addr->ip4;
+
+            ip4addr->octets[0] = (saddr >> 24)       ;
+            ip4addr->octets[1] = (saddr >> 16) & 0xFF;
+            ip4addr->octets[2] = (saddr >>  8) & 0xFF;
+            ip4addr->octets[3] = (saddr      ) & 0xFF;
+
+            ip4addr->prefix_length = nl_addr_get_prefixlen(nl_addr);
+            break;
+          case AF_INET6:;
+            struct sockaddr_in6 *sockaddr_in6 = (void *)&sockaddr;
+            unsigned char *s6addr = sockaddr_in6->sin6_addr.s6_addr;
+            tuna_ip6_address *ip6addr = &addr->ip6;
+
+            ip6addr->hextets[0] = s6addr[ 0] << 8 | s6addr[ 1];
+            ip6addr->hextets[1] = s6addr[ 2] << 8 | s6addr[ 3];
+            ip6addr->hextets[2] = s6addr[ 4] << 8 | s6addr[ 5];
+            ip6addr->hextets[3] = s6addr[ 6] << 8 | s6addr[ 7];
+            ip6addr->hextets[4] = s6addr[ 8] << 8 | s6addr[ 9];
+            ip6addr->hextets[5] = s6addr[10] << 8 | s6addr[11];
+            ip6addr->hextets[6] = s6addr[12] << 8 | s6addr[13];
+            ip6addr->hextets[7] = s6addr[14] << 8 | s6addr[15];
+
+            ip6addr->prefix_length = nl_addr_get_prefixlen(nl_addr);
+            break;
+          default:
+            continue;
+        }
+
+        ++addr;
+    }
+
+    *addrs = dev->addrs;
+    *count = cnt;
+  done:;
+    nl_cache_free(nl_cache);
+    return err;
+  fail:;
+    free(dev->addrs);
+    dev->addrs = NULL;
     goto done;
 }
 

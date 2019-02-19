@@ -72,7 +72,9 @@ tuna_version const tuna_linked_version;
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef enum tuna_error {
-    TUNA_UNEXPECTED = 1,
+    TUNA_PRIV_NOT_ERROR,
+
+    TUNA_UNEXPECTED,
     TUNA_DEVICE_LOST,
     TUNA_FORBIDDEN,
     TUNA_OUT_OF_MEMORY,
@@ -166,7 +168,9 @@ typedef struct tuna_ip6_address {
 } tuna_ip6_address;
 
 typedef enum tuna_address_family {
-    TUNA_IP4 = 1,
+    TUNA_PRIV_NOT_ADDRESS_TYPE,
+
+    TUNA_IP4,
     TUNA_IP6,
 } tuna_address_family;
 
