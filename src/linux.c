@@ -414,45 +414,27 @@ tuna_get_addresses(tuna_device const *device,
         struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
         if (!nl_addr) { continue; }
 
-        struct sockaddr_storage sockaddr;
-        socklen_t socklen = sizeof(sockaddr);
-        if ((err = nl_addr_fill_sockaddr(nl_addr,
-                                         (void *)&sockaddr, &socklen)))
-        {
-            err = tuna_priv_translate_nlerr(-err);
-            goto fail;
-        }
+        unsigned char *raw_addr = nl_addr_get_binary_addr(nl_addr);
 
         tuna_address *addr = dev->addrs + cnt;
-        switch (sockaddr.ss_family) {
+        switch (nl_addr_get_family(nl_addr)) {
           case AF_INET: {
-            uint32_t raw_addr = 
-                ((struct sockaddr_in *)&sockaddr)->sin_addr.s_addr;
-
             addr->family = TUNA_IP4;
 
-            addr->ip4.octets[0] = (raw_addr >> 24)       ;
-            addr->ip4.octets[1] = (raw_addr >> 16) & 0xFF;
-            addr->ip4.octets[2] = (raw_addr >>  8) & 0xFF;
-            addr->ip4.octets[3] = (raw_addr      ) & 0xFF;
+            for (size_t i = 0; i < 4; ++i) {
+                addr->ip4.octets[i] = raw_addr[i];
+            }
 
             addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
           }
           case AF_INET6: {
-            unsigned char *raw_addr = 
-                ((struct sockaddr_in6 *)&sockaddr)->sin6_addr.s6_addr;
-
             addr->family = TUNA_IP6;
 
-            addr->ip6.hextets[0] = raw_addr[ 0] << 8 | raw_addr[ 1];
-            addr->ip6.hextets[1] = raw_addr[ 2] << 8 | raw_addr[ 3];
-            addr->ip6.hextets[2] = raw_addr[ 4] << 8 | raw_addr[ 5];
-            addr->ip6.hextets[3] = raw_addr[ 6] << 8 | raw_addr[ 7];
-            addr->ip6.hextets[4] = raw_addr[ 8] << 8 | raw_addr[ 9];
-            addr->ip6.hextets[5] = raw_addr[10] << 8 | raw_addr[11];
-            addr->ip6.hextets[6] = raw_addr[12] << 8 | raw_addr[13];
-            addr->ip6.hextets[7] = raw_addr[14] << 8 | raw_addr[15];
+            for (size_t i = 0; i < 8; ++i) {
+                addr->ip6.hextets[i] = raw_addr[2 * i    ] << 8
+                                     | raw_addr[2 * i + 1];
+            }
 
             addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
