@@ -375,7 +375,7 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
 
 tuna_error
 tuna_get_addresses(tuna_device const *device,
-                   tuna_address const **addrs, size_t *count)
+                   tuna_address const **addrs, size_t *cnt)
 {
     tuna_device *dev = (void *)device;
 
@@ -388,10 +388,10 @@ tuna_get_addresses(tuna_device const *device,
         goto fail;
     }
 
-    size_t cnt = nl_cache_nitems(nl_cache);
+    size_t max_cnt = nl_cache_nitems(nl_cache);
 
     free(dev->addrs);
-    if (!(dev->addrs = malloc(cnt * sizeof(*dev->addrs)))) {
+    if (!(dev->addrs = malloc(max_cnt * sizeof(*dev->addrs)))) {
         err = TUNA_OUT_OF_MEMORY;
         goto fail;
     }
@@ -419,31 +419,33 @@ tuna_get_addresses(tuna_device const *device,
         switch (sockaddr.ss_family) {
           case AF_INET:;
             struct sockaddr_in *sockaddr_in = (void *)&sockaddr;
-            uint32_t saddr = sockaddr_in->sin_addr.s_addr;
-            tuna_ip4_address *ip4addr = &addr->ip4;
+            uint32_t raw_addr = sockaddr_in->sin_addr.s_addr;
 
-            ip4addr->octets[0] = (saddr >> 24)       ;
-            ip4addr->octets[1] = (saddr >> 16) & 0xFF;
-            ip4addr->octets[2] = (saddr >>  8) & 0xFF;
-            ip4addr->octets[3] = (saddr      ) & 0xFF;
+            addr->family = TUNA_IP4;
 
-            ip4addr->prefix_length = nl_addr_get_prefixlen(nl_addr);
+            addr->ip4.octets[0] = (raw_addr >> 24)       ;
+            addr->ip4.octets[1] = (raw_addr >> 16) & 0xFF;
+            addr->ip4.octets[2] = (raw_addr >>  8) & 0xFF;
+            addr->ip4.octets[3] = (raw_addr      ) & 0xFF;
+
+            addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
           case AF_INET6:;
             struct sockaddr_in6 *sockaddr_in6 = (void *)&sockaddr;
-            unsigned char *s6addr = sockaddr_in6->sin6_addr.s6_addr;
-            tuna_ip6_address *ip6addr = &addr->ip6;
+            unsigned char *raw6_addr = sockaddr_in6->sin6_addr.s6_addr;
 
-            ip6addr->hextets[0] = s6addr[ 0] << 8 | s6addr[ 1];
-            ip6addr->hextets[1] = s6addr[ 2] << 8 | s6addr[ 3];
-            ip6addr->hextets[2] = s6addr[ 4] << 8 | s6addr[ 5];
-            ip6addr->hextets[3] = s6addr[ 6] << 8 | s6addr[ 7];
-            ip6addr->hextets[4] = s6addr[ 8] << 8 | s6addr[ 9];
-            ip6addr->hextets[5] = s6addr[10] << 8 | s6addr[11];
-            ip6addr->hextets[6] = s6addr[12] << 8 | s6addr[13];
-            ip6addr->hextets[7] = s6addr[14] << 8 | s6addr[15];
+            addr->family = TUNA_IP6;
 
-            ip6addr->prefix_length = nl_addr_get_prefixlen(nl_addr);
+            addr->ip6.hextets[0] = raw6_addr[ 0] << 8 | raw6_addr[ 1];
+            addr->ip6.hextets[1] = raw6_addr[ 2] << 8 | raw6_addr[ 3];
+            addr->ip6.hextets[2] = raw6_addr[ 4] << 8 | raw6_addr[ 5];
+            addr->ip6.hextets[3] = raw6_addr[ 6] << 8 | raw6_addr[ 7];
+            addr->ip6.hextets[4] = raw6_addr[ 8] << 8 | raw6_addr[ 9];
+            addr->ip6.hextets[5] = raw6_addr[10] << 8 | raw6_addr[11];
+            addr->ip6.hextets[6] = raw6_addr[12] << 8 | raw6_addr[13];
+            addr->ip6.hextets[7] = raw6_addr[14] << 8 | raw6_addr[15];
+
+            addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
           default:
             continue;
@@ -453,7 +455,7 @@ tuna_get_addresses(tuna_device const *device,
     }
 
     *addrs = dev->addrs;
-    *count = cnt;
+    *cnt = addr - dev->addrs;
   done:;
     nl_cache_free(nl_cache);
     return err;

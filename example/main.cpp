@@ -6,6 +6,7 @@
 
 #include <thread>
 #include <iostream>
+#include <iomanip>
 
 int main() {
     tuna_device* device;
@@ -70,6 +71,55 @@ int main() {
     //              << " : " << errno << " " << strerror(errno) <<"\n";
     //    return EXIT_FAILURE;
     //}
+
+    switch (auto e = tuna_set_status(device, TUNA_ENABLED)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
+                  << " : " << errno << " " << strerror(errno) <<"\n";
+        return EXIT_FAILURE;
+    }
+
+    tuna_address const* addresses;
+    std::size_t address_count;
+    switch (auto e = tuna_get_addresses(device, &addresses, &address_count)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_get_addresses failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
+
+    std::cout << "addresses:\n";
+    for (std::size_t i = 0; i < address_count; ++i) {
+        auto& a = addresses[i];
+        switch (a.family) {
+          case TUNA_IP4:
+            std::cout << "\tip4 "
+                      << (int)a.ip4.octets[0] << "."
+                      << (int)a.ip4.octets[1] << "."
+                      << (int)a.ip4.octets[2] << "."
+                      << (int)a.ip4.octets[3] << "/"
+                      << (int)a.ip4.prefix_length << "\n";
+            break;
+          case TUNA_IP6:
+            std::cout << "\tip6 "
+                      << std::hex << (int)a.ip6.hextets[0] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[1] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[2] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[3] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[4] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[5] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[6] << std::dec << ":"
+                      << std::hex << (int)a.ip6.hextets[7] << std::dec << "/"
+                      << (int)a.ip6.prefix_length << "\n";
+            break;
+          default:
+            std::cout << "unknown\n";
+            break;
+        }
+    }
 
     for (int i = 0; i < 1000; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
