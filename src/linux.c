@@ -24,9 +24,14 @@
 
 struct tuna_device {
     struct nl_sock *nl_sock;
-    int fd; int ifindex;
+    
+    int fd;
+    int ifindex;
+
     char name[IFNAMSIZ];
+    
     tuna_address *addrs;
+    size_t addrs_cap;
 };
 
 static
@@ -375,7 +380,7 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
 
 tuna_error
 tuna_get_addresses(tuna_device const *device,
-                   tuna_address const **addrs, size_t *cnt)
+                   tuna_address const **addresses, size_t *count)
 {
     tuna_device *dev = (void *)device;
 
@@ -388,18 +393,20 @@ tuna_get_addresses(tuna_device const *device,
         goto fail;
     }
 
-    size_t max_cnt = nl_cache_nitems(nl_cache);
-
-    free(dev->addrs);
-    if (!(dev->addrs = malloc(max_cnt * sizeof(*dev->addrs)))) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto fail;
-    }
-
-    tuna_address *addr = dev->addrs;
+    size_t cnt = 0;
     for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
+        if (cnt == dev->addrs_cap) {
+            size_t addrs_cap = dev->addrs_cap * 5 / 3 + 1;
+            tuna_address *addrs = realloc(dev->addrs, addrs_cap);
+            if (!addrs) {
+                err = TUNA_OUT_OF_MEMORY;
+                goto fail;
+            }
+            dev->addrs = addrs;
+            dev->addrs_cap = addrs_cap;
+        }
         struct rtnl_addr *rtnl_addr = (void *)nl_object;
         
         if (rtnl_addr_get_ifindex(rtnl_addr) != dev->ifindex) { continue; }
@@ -416,10 +423,11 @@ tuna_get_addresses(tuna_device const *device,
             goto fail;
         }
 
+        tuna_address *addr = dev->addrs + cnt;
         switch (sockaddr.ss_family) {
-          case AF_INET:;
-            struct sockaddr_in *sockaddr_in = (void *)&sockaddr;
-            uint32_t raw_addr = sockaddr_in->sin_addr.s_addr;
+          case AF_INET: {
+            uint32_t raw_addr = 
+                ((struct sockaddr_in *)&sockaddr)->sin_addr.s_addr;
 
             addr->family = TUNA_IP4;
 
@@ -430,38 +438,44 @@ tuna_get_addresses(tuna_device const *device,
 
             addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
-          case AF_INET6:;
-            struct sockaddr_in6 *sockaddr_in6 = (void *)&sockaddr;
-            unsigned char *raw6_addr = sockaddr_in6->sin6_addr.s6_addr;
+          }
+          case AF_INET6: {
+            unsigned char *raw_addr = 
+                ((struct sockaddr_in6 *)&sockaddr)->sin6_addr.s6_addr;
 
             addr->family = TUNA_IP6;
 
-            addr->ip6.hextets[0] = raw6_addr[ 0] << 8 | raw6_addr[ 1];
-            addr->ip6.hextets[1] = raw6_addr[ 2] << 8 | raw6_addr[ 3];
-            addr->ip6.hextets[2] = raw6_addr[ 4] << 8 | raw6_addr[ 5];
-            addr->ip6.hextets[3] = raw6_addr[ 6] << 8 | raw6_addr[ 7];
-            addr->ip6.hextets[4] = raw6_addr[ 8] << 8 | raw6_addr[ 9];
-            addr->ip6.hextets[5] = raw6_addr[10] << 8 | raw6_addr[11];
-            addr->ip6.hextets[6] = raw6_addr[12] << 8 | raw6_addr[13];
-            addr->ip6.hextets[7] = raw6_addr[14] << 8 | raw6_addr[15];
+            addr->ip6.hextets[0] = raw_addr[ 0] << 8 | raw_addr[ 1];
+            addr->ip6.hextets[1] = raw_addr[ 2] << 8 | raw_addr[ 3];
+            addr->ip6.hextets[2] = raw_addr[ 4] << 8 | raw_addr[ 5];
+            addr->ip6.hextets[3] = raw_addr[ 6] << 8 | raw_addr[ 7];
+            addr->ip6.hextets[4] = raw_addr[ 8] << 8 | raw_addr[ 9];
+            addr->ip6.hextets[5] = raw_addr[10] << 8 | raw_addr[11];
+            addr->ip6.hextets[6] = raw_addr[12] << 8 | raw_addr[13];
+            addr->ip6.hextets[7] = raw_addr[14] << 8 | raw_addr[15];
 
             addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
+          }
           default:
             continue;
         }
 
-        ++addr;
+        ++cnt;
     }
 
-    *addrs = dev->addrs;
-    *cnt = addr - dev->addrs;
+    tuna_address *addrs = realloc(dev->addrs, cnt);
+    if (addrs) {
+        dev->addrs = addrs;
+        dev->addrs_cap = cnt;
+    }
+
+    *addresses = dev->addrs;
+    *count = cnt;
   done:;
     nl_cache_free(nl_cache);
     return err;
   fail:;
-    free(dev->addrs);
-    dev->addrs = NULL;
     goto done;
 }
 
