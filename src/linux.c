@@ -378,6 +378,31 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
     goto done;
 }
 
+static
+int
+tuna_priv_from_nl_addr(tuna_address *addr, struct nl_addr *nl_addr) {
+    unsigned char *raw_addr = nl_addr_get_binary_addr(nl_addr);
+    switch (nl_addr_get_family(nl_addr)) {
+      case AF_INET:;
+        addr->family = TUNA_IP4;
+        for (size_t i = 0; i < 4; ++i) {
+            addr->ip4.octets[i] = raw_addr[i];
+        }
+        addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
+        return 1;
+      case AF_INET6:;
+        addr->family = TUNA_IP6;
+        for (size_t i = 0; i < 8; ++i) {
+            addr->ip6.hextets[i] = raw_addr[2 * i    ] << 8
+                                 | raw_addr[2 * i + 1];
+        }
+        addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
+        return 1;
+      default:
+        return 0;
+    }
+}
+
 tuna_error
 tuna_get_addresses(tuna_device const *device,
                    tuna_address const **addresses, size_t *count)
@@ -412,34 +437,7 @@ tuna_get_addresses(tuna_device const *device,
         if (rtnl_addr_get_ifindex(rtnl_addr) != dev->ifindex) { continue; }
 
         struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
-        if (!nl_addr) { continue; }
-
-        unsigned char *raw_addr = nl_addr_get_binary_addr(nl_addr);
-
-        tuna_address *addr = dev->addrs + cnt;
-        switch (nl_addr_get_family(nl_addr)) {
-          case AF_INET:;
-            addr->family = TUNA_IP4;
-
-            for (size_t i = 0; i < 4; ++i) {
-                addr->ip4.octets[i] = raw_addr[i];
-            }
-
-            addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
-            break;
-          case AF_INET6:;
-            addr->family = TUNA_IP6;
-
-            for (size_t i = 0; i < 8; ++i) {
-                addr->ip6.hextets[i] = raw_addr[2 * i    ] << 8
-                                     | raw_addr[2 * i + 1];
-            }
-
-            addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
-            break;
-          default:
-            continue;
-        }
+        if (!tuna_priv_from_nl_addr(dev->addrs + cnt, nl_addr)) { continue; }
 
         ++cnt;
     }
