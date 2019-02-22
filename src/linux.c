@@ -418,7 +418,7 @@ tuna_get_addresses(tuna_device const *device,
 
         tuna_address *addr = dev->addrs + cnt;
         switch (nl_addr_get_family(nl_addr)) {
-          case AF_INET: {
+          case AF_INET:;
             addr->family = TUNA_IP4;
 
             for (size_t i = 0; i < 4; ++i) {
@@ -427,8 +427,7 @@ tuna_get_addresses(tuna_device const *device,
 
             addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
-          }
-          case AF_INET6: {
+          case AF_INET6:;
             addr->family = TUNA_IP6;
 
             for (size_t i = 0; i < 8; ++i) {
@@ -438,7 +437,6 @@ tuna_get_addresses(tuna_device const *device,
 
             addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
             break;
-          }
           default:
             continue;
         }
