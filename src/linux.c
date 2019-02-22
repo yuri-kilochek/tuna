@@ -206,6 +206,8 @@ tuna_set_status(tuna_device *dev, tuna_status status) {
       case TUNA_ENABLED:;
         rtnl_link_set_flags(rtnl_link_patch, IFF_UP);
         break;
+      default:;
+        assert(0);
     }
 
     if ((err = rtnl_link_change(dev->nl_sock,
@@ -380,19 +382,17 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
 
 static
 int
-tuna_priv_from_nl_addr(tuna_address *addr, struct nl_addr *nl_addr) {
+tuna_priv_addr_from_nl(tuna_address *addr, struct nl_addr *nl_addr) {
     unsigned char *raw_addr = nl_addr_get_binary_addr(nl_addr);
     switch (nl_addr_get_family(nl_addr)) {
       case AF_INET:;
         addr->family = TUNA_IP4;
-        for (size_t i = 0; i < 4; ++i) {
-            addr->ip4.octets[i] = raw_addr[i];
-        }
+        memcpy(addr->ip4.octets, raw_addr, 4);
         addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
         return 1;
       case AF_INET6:;
         addr->family = TUNA_IP6;
-        for (size_t i = 0; i < 8; ++i) {
+        for (int i = 0; i < 8; ++i) {
             addr->ip6.hextets[i] = raw_addr[2 * i    ] << 8
                                  | raw_addr[2 * i + 1];
         }
@@ -424,7 +424,8 @@ tuna_get_addresses(tuna_device const *device,
     {
         if (cnt == dev->addrs_cap) {
             size_t addrs_cap = dev->addrs_cap * 5 / 3 + 1;
-            tuna_address *addrs = realloc(dev->addrs, addrs_cap);
+            tuna_address *addrs = realloc(dev->addrs,
+                                          addrs_cap * sizeof(*addrs));
             if (!addrs) {
                 err = TUNA_OUT_OF_MEMORY;
                 goto fail;
@@ -437,12 +438,12 @@ tuna_get_addresses(tuna_device const *device,
         if (rtnl_addr_get_ifindex(rtnl_addr) != dev->ifindex) { continue; }
 
         struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
-        if (!tuna_priv_from_nl_addr(dev->addrs + cnt, nl_addr)) { continue; }
+        if (!tuna_priv_addr_from_nl(dev->addrs + cnt, nl_addr)) { continue; }
 
         ++cnt;
     }
 
-    tuna_address *addrs = realloc(dev->addrs, cnt);
+    tuna_address *addrs = realloc(dev->addrs, cnt * sizeof(*addrs));
     if (addrs) {
         dev->addrs = addrs;
         dev->addrs_cap = cnt;
@@ -452,6 +453,83 @@ tuna_get_addresses(tuna_device const *device,
     *count = cnt;
   done:;
     nl_cache_free(nl_cache);
+    return err;
+  fail:;
+    goto done;
+}
+
+enum { TUNA_PRIV_MAX_RAW_ADDR_SZ = 16 };
+
+static
+void
+tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr *nl_addr) {
+    uint8_t raw_addr[TUNA_PRIV_MAX_RAW_ADDR_SZ];
+    switch (addr->family) {
+      case TUNA_IP4:;
+        nl_addr_set_family(nl_addr, AF_INET);
+
+        assert(4 <= TUNA_PRIV_MAX_RAW_ADDR_SZ);
+        memcpy(raw_addr, addr->ip4.octets, 4);
+        nl_addr_set_binary_addr(nl_addr, raw_addr, 4);
+
+        assert(addr->ip4.prefix_length <= 32);
+        nl_addr_set_prefixlen(nl_addr, addr->ip4.prefix_length);
+        break;
+      case TUNA_IP6:;
+        nl_addr_set_family(nl_addr, AF_INET6);
+
+        assert(16 <= TUNA_PRIV_MAX_RAW_ADDR_SZ);
+        for (int i = 0; i < 8; ++i) {
+            uint16_t hextet = addr->ip6.hextets[i];
+            raw_addr[2 * i    ] = hextet >> 8;
+            raw_addr[2 * i + 1] = hextet;
+        }
+        nl_addr_set_binary_addr(nl_addr, raw_addr, 16);
+
+        assert(addr->ip6.prefix_length <= 128);
+        nl_addr_set_prefixlen(nl_addr, addr->ip6.prefix_length);
+        break;
+      default:;
+        assert(0);
+    }
+}
+
+TUNA_PRIV_API
+tuna_error
+tuna_add_address(tuna_device *dev, tuna_address const *addr) {
+    struct nl_addr *nl_addr = NULL;
+    struct rtnl_addr *rtnl_addr = NULL;
+
+    int err = 0;
+
+    if (!(nl_addr = nl_addr_alloc(TUNA_PRIV_MAX_RAW_ADDR_SZ))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+    tuna_priv_addr_to_nl(addr, nl_addr);
+
+    if (!(rtnl_addr = rtnl_addr_alloc())) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+    rtnl_addr_set_ifindex(rtnl_addr, dev->ifindex);
+    if ((err = rtnl_addr_set_local(rtnl_addr, nl_addr))) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+    nl_object_dump((void *)rtnl_addr, &(struct nl_dump_params){
+        .dp_fd = stdout,
+    });
+    if ((err = rtnl_addr_add(dev->nl_sock, rtnl_addr, 0))) {
+        printf("NL ERRPR: %d\n", -err);
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+  done:;
+    rtnl_addr_put(rtnl_addr);
+    nl_addr_put(nl_addr);
     return err;
   fail:;
     goto done;

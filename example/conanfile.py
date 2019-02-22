@@ -20,4 +20,4 @@ class ExampleConan(ConanFile):
         cmake.build()
 
     def test(self):
-        self.run('sudo .' + os.sep + 'example')
+        self.run('sudo valgrind .' + os.sep + 'example')

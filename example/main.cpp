@@ -81,6 +81,21 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    tuna_address new_address;
+    new_address.family = TUNA_IP4;
+    new_address.ip4.octets[0] = 20;
+    new_address.ip4.octets[1] = 30;
+    new_address.ip4.octets[2] = 40;
+    new_address.ip4.octets[3] = 50;
+    new_address.ip4.prefix_length = 24;
+    switch (auto e = tuna_add_address(device, &new_address)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
+
     tuna_address const* addresses;
     std::size_t address_count;
     switch (auto e = tuna_get_addresses(device, &addresses, &address_count)) {
