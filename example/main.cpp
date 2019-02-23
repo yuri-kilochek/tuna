@@ -73,10 +73,10 @@ int main() {
 
     tuna_address new_address;
     new_address.family = TUNA_IP4;
-    new_address.ip4.octets[0] = 20;
-    new_address.ip4.octets[1] = 30;
-    new_address.ip4.octets[2] = 40;
-    new_address.ip4.octets[3] = 50;
+    new_address.ip4.value[0] = 20;
+    new_address.ip4.value[1] = 30;
+    new_address.ip4.value[2] = 40;
+    new_address.ip4.value[3] = 50;
     new_address.ip4.prefix_length = 24;
     switch (auto e = tuna_add_address(device, &new_address)) {
       case 0:
@@ -102,30 +102,25 @@ int main() {
         switch (a.family) {
           case TUNA_IP4:
             std::cout << "\tip4 "
-                      << (int)a.ip4.octets[0] << "."
-                      << (int)a.ip4.octets[1] << "."
-                      << (int)a.ip4.octets[2] << "."
-                      << (int)a.ip4.octets[3] << "/"
+                      << (int)a.ip4.value[0] << "."
+                      << (int)a.ip4.value[1] << "."
+                      << (int)a.ip4.value[2] << "."
+                      << (int)a.ip4.value[3] << "/"
                       << (int)a.ip4.prefix_length << "\n";
             break;
           case TUNA_IP6:
             std::cout << "\tip6 "
-                      << std::hex << (int)a.ip6.hextets[0] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[1] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[2] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[3] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[4] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[5] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[6] << std::dec << ":"
-                      << std::hex << (int)a.ip6.hextets[7] << std::dec << "/"
+                      << std::hex
+                      << (int)a.ip6.value[ 0] << (int)a.ip6.value[ 1] << ":"
+                      << (int)a.ip6.value[ 2] << (int)a.ip6.value[ 3] << ":"
+                      << (int)a.ip6.value[ 4] << (int)a.ip6.value[ 5] << ":"
+                      << (int)a.ip6.value[ 6] << (int)a.ip6.value[ 7] << ":"
+                      << (int)a.ip6.value[ 8] << (int)a.ip6.value[ 9] << ":"
+                      << (int)a.ip6.value[10] << (int)a.ip6.value[11] << ":"
+                      << (int)a.ip6.value[12] << (int)a.ip6.value[13] << ":"
+                      << (int)a.ip6.value[14] << (int)a.ip6.value[15] << "/"
+                      << std::dec
                       << (int)a.ip6.prefix_length << "\n";
-            switch (auto e = tuna_remove_address(device, &a)) {
-              case 0:
-                break;
-              default:
-                std::cerr << "tuna_remove_address failed: " << tuna_get_error_name(e) << "\n";
-                return EXIT_FAILURE;
-            }
             break;
           default:
             std::cout << "unknown\n";

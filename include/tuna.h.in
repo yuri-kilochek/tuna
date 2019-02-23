@@ -158,17 +158,17 @@ tuna_set_mtu(tuna_device *device, size_t mtu);
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef struct tuna_ip4_address {
-    uint_least8_t octets[4];
+    uint_least8_t value[4];
     uint_least8_t prefix_length;
 } tuna_ip4_address;
 
 typedef struct tuna_ip6_address {
-    uint_least16_t hextets[8];
+    uint_least8_t value[16];
     uint_least8_t prefix_length;
 } tuna_ip6_address;
 
 typedef enum tuna_address_family {
-    TUNA_PRIV_NOT_ADDRESS_TYPE,
+    TUNA_PRIV_NOT_ADDRESS_FAMILY,
 
     TUNA_IP4,
     TUNA_IP6,

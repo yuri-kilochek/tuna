@@ -383,19 +383,15 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
 static
 int
 tuna_priv_addr_from_nl(tuna_address *addr, struct nl_addr *nl_addr) {
-    unsigned char *raw_addr = nl_addr_get_binary_addr(nl_addr);
     switch (nl_addr_get_family(nl_addr)) {
       case AF_INET:;
         addr->family = TUNA_IP4;
-        memcpy(addr->ip4.octets, raw_addr, 4);
+        memcpy(addr->ip4.value, nl_addr_get_binary_addr(nl_addr), 4);
         addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
         return 1;
       case AF_INET6:;
         addr->family = TUNA_IP6;
-        for (int i = 0; i < 8; ++i) {
-            addr->ip6.hextets[i] = raw_addr[2 * i    ] << 8
-                                 | raw_addr[2 * i + 1];
-        }
+        memcpy(addr->ip6.value, nl_addr_get_binary_addr(nl_addr), 16);
         addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
         return 1;
       default:
@@ -465,11 +461,9 @@ tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
 
     int err = 0;
 
-    unsigned char *raw_addr;
     switch (addr->family) {
       case TUNA_IP4:;
-        raw_addr = (void *)addr->ip4.octets;
-        if (!(nl_addr = nl_addr_build(AF_INET, raw_addr, 4))) {
+        if (!(nl_addr = nl_addr_build(AF_INET, addr->ip4.value, 4))) {
             err = TUNA_OUT_OF_MEMORY;
             goto fail;
         }
@@ -477,13 +471,7 @@ tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
         nl_addr_set_prefixlen(nl_addr, addr->ip4.prefix_length);
         break;
       case TUNA_IP6:;
-        raw_addr = (unsigned char[16]){0};
-        for (int i = 0; i < 8; ++i) {
-            uint16_t hextet = addr->ip6.hextets[i];
-            raw_addr[2 * i    ] = hextet >> 8;
-            raw_addr[2 * i + 1] = hextet;
-        }
-        if (!(nl_addr = nl_addr_build(AF_INET6, raw_addr, 16))) {
+        if (!(nl_addr = nl_addr_build(AF_INET6, addr->ip6.value, 16))) {
             err = TUNA_OUT_OF_MEMORY;
             goto fail;
         }
