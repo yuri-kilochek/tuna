@@ -70,6 +70,64 @@ tuna_priv_translate_nlerr(int err) {
     }
 }
 
+static
+tuna_error
+tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
+    struct nl_msg *nl_msg = NULL;
+    
+    int err = 0;
+
+    if (!(nl_msg = nlmsg_alloc_simple(RTM_NEWLINK, 0))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+
+    struct ifinfomsg ifi = {.ifi_index = dev->ifindex};
+    if ((err = nlmsg_append(nl_msg, &ifi, sizeof(ifi), NLMSG_ALIGNTO))) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+    struct nlattr *ifla_af_spec_nlarrt;
+    if (!(ifla_af_spec_nlarrt = nla_nest_start(nl_msg, IFLA_AF_SPEC))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+
+    struct nlattr *af_inet6_nlarrt;
+    if (!(af_inet6_nlarrt = nla_nest_start(nl_msg, AF_INET6))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+
+    if ((err = nla_put_u8(nl_msg, IFLA_INET6_ADDR_GEN_MODE,
+                                  IN6_ADDR_GEN_MODE_NONE)))
+    {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+    nla_nest_end(nl_msg, af_inet6_nlarrt);
+
+    nla_nest_end(nl_msg, ifla_af_spec_nlarrt);
+
+    if ((err = nl_send_auto(dev->nl_sock, nl_msg)) < 0) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+    if ((err = nl_wait_for_ack(dev->nl_sock))) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+  done:
+    nlmsg_free(nl_msg);
+    return err;
+  fail:
+    goto done;
+}
+
 tuna_error
 tuna_create_device(tuna_device **device) {
     struct rtnl_link *rtnl_link;
@@ -128,6 +186,8 @@ tuna_create_device(tuna_device **device) {
         goto fail;
     }
     dev->ifindex = rtnl_link_get_ifindex(rtnl_link);
+
+    if ((err = tuna_priv_disable_default_local_ip6_addr(dev))) { goto fail; }
 
     *device = dev;
   done:;
