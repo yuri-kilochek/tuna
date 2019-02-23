@@ -444,7 +444,7 @@ tuna_get_addresses(tuna_device const *device,
     }
 
     tuna_address *addrs = realloc(dev->addrs, cnt * sizeof(*addrs));
-    if (addrs) {
+    if (!cnt || addrs) {
         dev->addrs = addrs;
         dev->addrs_cap = cnt;
     }
@@ -510,9 +510,7 @@ tuna_add_address(tuna_device *dev, tuna_address const *addr) {
 
     int err = 0;
 
-    if ((err = tuna_priv_addr_to_nl(addr, &nl_addr))) {
-        goto fail;
-    }
+    if ((err = tuna_priv_addr_to_nl(addr, &nl_addr))) { goto fail; }
 
     if (!(rtnl_addr = rtnl_addr_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
@@ -526,6 +524,45 @@ tuna_add_address(tuna_device *dev, tuna_address const *addr) {
     }
 
     if ((err = rtnl_addr_add(dev->nl_sock, rtnl_addr, 0))) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+  done:;
+    rtnl_addr_put(rtnl_addr);
+    nl_addr_put(nl_addr);
+    return err;
+  fail:;
+    goto done;
+}
+
+tuna_error
+tuna_remove_address(tuna_device *dev, tuna_address const *addr) {
+    struct nl_addr *nl_addr = NULL;
+    struct rtnl_addr *rtnl_addr = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_priv_addr_to_nl(addr, &nl_addr))) { goto fail; }
+
+    if (!(rtnl_addr = rtnl_addr_alloc())) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+
+    rtnl_addr_set_ifindex(rtnl_addr, dev->ifindex);
+    if ((err = rtnl_addr_set_local(rtnl_addr, nl_addr))) {
+        err = tuna_priv_translate_nlerr(-err);
+        goto fail;
+    }
+
+    switch ((err = rtnl_addr_delete(dev->nl_sock, rtnl_addr, 0))) {
+      case 0:
+        break;
+      case -NLE_NOADDR:
+        err = 0;
+        break;
+      default:
         err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }

@@ -62,16 +62,6 @@ int main() {
     }
     std::cout << "changed mtu to " << new_mtu << std::endl;
 
-    //uint_least8_t addr[] = {20, 30, 40, 50};
-    //switch (auto e = tuna_set_ip4_address(&device, addr, 24)) {
-    //  case 0:
-    //    break;
-    //  default:
-    //    std::cerr << "tuna_set_ip4_address failed: " << tuna_get_error_name(e)
-    //              << " : " << errno << " " << strerror(errno) <<"\n";
-    //    return EXIT_FAILURE;
-    //}
-
     switch (auto e = tuna_set_status(device, TUNA_ENABLED)) {
       case 0:
         break;
@@ -129,6 +119,13 @@ int main() {
                       << std::hex << (int)a.ip6.hextets[6] << std::dec << ":"
                       << std::hex << (int)a.ip6.hextets[7] << std::dec << "/"
                       << (int)a.ip6.prefix_length << "\n";
+            switch (auto e = tuna_remove_address(device, &a)) {
+              case 0:
+                break;
+              default:
+                std::cerr << "tuna_remove_address failed: " << tuna_get_error_name(e) << "\n";
+                return EXIT_FAILURE;
+            }
             break;
           default:
             std::cout << "unknown\n";
