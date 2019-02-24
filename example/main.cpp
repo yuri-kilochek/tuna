@@ -84,6 +84,13 @@ int main() {
         std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
         return EXIT_FAILURE;
     }
+    switch (auto e = tuna_add_address(device, &new_address)) {
+      case 0:
+        break;
+      default:
+        std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
 
     tuna_address const* addresses;
     std::size_t address_count;

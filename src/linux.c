@@ -573,7 +573,7 @@ tuna_add_address(tuna_device *dev, tuna_address const *addr) {
         goto fail;
     }
 
-    if ((err = rtnl_addr_add(dev->nl_sock, rtnl_addr, 0))) {
+    if ((err = rtnl_addr_add(dev->nl_sock, rtnl_addr, NLM_F_REPLACE))) {
         err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }
