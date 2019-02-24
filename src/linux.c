@@ -190,6 +190,7 @@ tuna_create_device(tuna_device **device) {
     if ((err = tuna_priv_disable_default_local_ip6_addr(dev))) { goto fail; }
 
     *device = dev;
+
   done:;
     rtnl_link_put(rtnl_link);
     return err;
@@ -507,6 +508,7 @@ tuna_get_addresses(tuna_device const *device,
 
     *addresses = dev->addrs;
     *count = cnt;
+
   done:;
     nl_cache_free(nl_cache);
     return err;
@@ -543,6 +545,7 @@ tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
     }
 
     *nl_address = nl_addr;
+
   done:
     return err;
   fail:
