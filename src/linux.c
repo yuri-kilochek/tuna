@@ -228,9 +228,9 @@ tuna_get_status(tuna_device const *dev, tuna_status *status) {
     }
 
     if (rtnl_link_get_flags(rtnl_link) & IFF_UP) {
-        *status = TUNA_ENABLED;
+        *status = TUNA_UP;
     } else {
-        *status = TUNA_DISABLED;
+        *status = TUNA_DOWN;
     }
 
   done:;
@@ -260,10 +260,10 @@ tuna_set_status(tuna_device *dev, tuna_status status) {
     }
 
     switch (status) {
-      case TUNA_DISABLED:;
+      case TUNA_DOWN:;
         rtnl_link_unset_flags(rtnl_link_patch, IFF_UP);
         break;
-      case TUNA_ENABLED:;
+      case TUNA_UP:;
         rtnl_link_set_flags(rtnl_link_patch, IFF_UP);
         break;
       default:;
@@ -550,7 +550,6 @@ tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
     goto done;
 }
 
-TUNA_PRIV_API
 tuna_error
 tuna_add_address(tuna_device *dev, tuna_address const *addr) {
     struct nl_addr *nl_addr = NULL;

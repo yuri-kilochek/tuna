@@ -117,8 +117,8 @@ tuna_get_io_handle(tuna_device const *device);
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef enum tuna_status {
-    TUNA_DISABLED,
-    TUNA_ENABLED,
+    TUNA_DOWN,
+    TUNA_UP,
 } tuna_status;
 
 TUNA_PRIV_API

@@ -62,12 +62,11 @@ int main() {
     }
     std::cout << "changed mtu to " << new_mtu << std::endl;
 
-    switch (auto e = tuna_set_status(device, TUNA_ENABLED)) {
+    switch (auto e = tuna_set_status(device, TUNA_UP)) {
       case 0:
         break;
       default:
-        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
-                  << " : " << errno << " " << strerror(errno) <<"\n";
+        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e) << "\n";
         return EXIT_FAILURE;
     }
 
@@ -131,13 +130,12 @@ int main() {
     for (int i = 0; i < 10; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
-        tuna_status status = (i % 2) ? TUNA_ENABLED : TUNA_DISABLED;
+        tuna_status status = (i % 2) ? TUNA_UP : TUNA_DOWN;
         switch (auto e = tuna_set_status(device, status)) {
           case 0:
             break;
           default:
-            std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e)
-                      << " : " << errno << " " << strerror(errno) <<"\n";
+            std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e) << "\n";
             return EXIT_FAILURE;
         }
 
