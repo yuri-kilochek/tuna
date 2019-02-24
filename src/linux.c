@@ -130,7 +130,7 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
 
 tuna_error
 tuna_create_device(tuna_device **device) {
-    struct rtnl_link *rtnl_link;
+    struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;
 
