@@ -1,8 +1,5 @@
 #include <tuna.h>
 
-#if TUNA_PRIV_OS_LINUX
-///////////////////////////////////////////////////////////////////////////////
-
 #include <errno.h>
 #include <string.h>
 #include <assert.h>
@@ -624,6 +621,3 @@ tuna_remove_address(tuna_device *dev, tuna_address const *addr) {
   fail:;
     goto done;
 }
-
-///////////////////////////////////////////////////////////////////////////////
-#endif

@@ -7,6 +7,10 @@
 #include <stdint.h>
 
 ///////////////////////////////////////////////////////////////////////////////
+#if __cplusplus
+extern "C" {
+#endif
+///////////////////////////////////////////////////////////////////////////////
 
 #if defined(_WIN32) \
  || defined(_WIN64) \
@@ -14,13 +18,6 @@
  || defined(__TOS_WIN__) \
  || defined(__WINDOWS__)
     #define TUNA_PRIV_OS_WINDOWS 1
-#elif defined(linux) \
-   || defined(__linux) \
-   || defined(__linux__) \
-   || defined(__gnu_linux__)
-    #define TUNA_PRIV_OS_LINUX 1
-#else
-    #error "Target OS not supported."
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -38,17 +35,13 @@
         #define TUNA_PRIV_API 
     #endif
 #else
-    #if defined(TUNA_EXPORT) || defined(TUNA_IMPORT)
+    #if defined(TUNA_IMPORT) || defined(TUNA_EXPORT)
         #define TUNA_PRIV_API __attribute__((visibility("default")))
     #else
         #define TUNA_PRIV_API 
     #endif
 #endif
 
-///////////////////////////////////////////////////////////////////////////////
-#if __cplusplus
-extern "C" {
-#endif
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef uint_least32_t tuna_version;

@@ -5,10 +5,10 @@ include(GNUInstallDirs)
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 project(tuna VERSION ${PROJECT_VERSION})
 
-add_library(tuna
-    src/version.c
-    src/error.c
-    src/linux.c
+add_library(tuna)
+
+set_target_properties(tuna PROPERTIES
+    VERSION ${PROJECT_VERSION}
 )
 
 string(CONFIGURE [=[
@@ -24,27 +24,14 @@ add_custom_command(
     VERBATIM COMMAND "${CMAKE_COMMAND}" -P configure.cmake
     OUTPUT include/tuna.h
 )
-target_sources(tuna PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
-)
-
 target_include_directories(tuna PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
-
-if(BUILD_SHARED_LIBS)
-    target_compile_definitions(tuna 
-        PRIVATE TUNA_EXPORT
-        INTERFACE TUNA_IMPORT
-    )
-    set_target_properties(tuna PROPERTIES
-        C_VISIBILITY_PRESET hidden
-    )
-endif()
-
-set_target_properties(tuna PROPERTIES
-    VERSION ${PROJECT_VERSION}
+target_sources(tuna PRIVATE
+    "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
+    src/version.c
+    src/error.c
+    $<$<PLATFORM_ID:Linux>:src/linux.c>
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
@@ -58,14 +45,27 @@ if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     )
 endif()
 
+if(BUILD_SHARED_LIBS)
+    target_compile_definitions(tuna 
+        PRIVATE TUNA_EXPORT
+        INTERFACE TUNA_IMPORT
+    )
+    set_target_properties(tuna PROPERTIES
+        C_VISIBILITY_PRESET hidden
+    )
+endif()
+
+target_include_directories(tuna PUBLIC
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
 install(TARGETS tuna
     EXPORT tuna
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
-)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
 )
 install(EXPORT tuna
     DESTINATION "${CMAKE_INSTALL_DATADIR}/tuna"
