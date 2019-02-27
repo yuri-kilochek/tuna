@@ -17,6 +17,8 @@ tuna_get_error_name(tuna_error err) {
         return "out of memory";
       case TUNA_TOO_MANY_HANDLES:;
         return "too many handles";
+      case TUNA_BUSY:;
+        return "busy";
       case TUNA_NAME_TOO_LONG:;
         return "name too long";
       case TUNA_DUPLICATE_NAME:;
