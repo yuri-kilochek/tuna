@@ -30,6 +30,10 @@ class TunaConan(ConanFile):
     short_paths = True
     no_copy_source = True
 
+    def requirements(self):
+        if self.settings.os == 'Linux':
+            self.requires('libnl/3.4.0@yurah/stable')
+
     def build(self):
         cmake = CMake(self)
         cmake.configure(defs={

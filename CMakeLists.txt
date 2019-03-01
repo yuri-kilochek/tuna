@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.8)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+
 include(GNUInstallDirs)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
@@ -35,13 +37,9 @@ target_sources(tuna PRIVATE
 )
 
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
-    find_package(PkgConfig REQUIRED)
-    pkg_check_modules(libnl REQUIRED IMPORTED_TARGET
-        libnl-3.0
-        libnl-route-3.0
-    )
+    find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE
-        PkgConfig::libnl
+        libnl::libnl
     )
 endif()
 
