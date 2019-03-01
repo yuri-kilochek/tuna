@@ -357,7 +357,7 @@ tuna_set_name(tuna_device *dev, char const *name) {
         err = TUNA_INVALID_NAME;
         goto fail;
       case -NLE_BUSY:
-        err = TUNA_BUSY;
+        err = TUNA_DEVICE_BUSY;
         goto fail;
       default:;
         err = tuna_priv_translate_nlerr(-err);
