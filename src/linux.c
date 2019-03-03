@@ -172,13 +172,15 @@ tuna_create_device(tuna_device **device) {
         goto fail;
     }
 
-    if ((err = rtnl_link_get_kernel(dev->nl_sock,
-                                    0, ifreq.ifr_name, &rtnl_link)))
+    switch ((err = rtnl_link_get_kernel(dev->nl_sock,
+                                        0, ifreq.ifr_name, &rtnl_link)))
     {
-        if (err == -NLE_OBJ_NOTFOUND) {
-            close(dev->fd);
-            goto open;
-        }
+      case 0:;
+        break;
+      case -NLE_OBJ_NOTFOUND:;
+        close(dev->fd);
+        goto open;
+      default:;
         err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }
@@ -415,21 +417,23 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
 
     rtnl_link_set_mtu(rtnl_link_patch, mtu);
 
-    if ((err = rtnl_link_change(dev->nl_sock,
-                                rtnl_link, rtnl_link_patch, 0)))
+    switch ((err = rtnl_link_change(dev->nl_sock,
+                                    rtnl_link, rtnl_link_patch, 0)))
     {
+      case 0:;
+        break;
+      case -NLE_INVAL:;
         size_t cur_mtu = rtnl_link_get_mtu(rtnl_link);
-        if (err == -NLE_INVAL) {
-            if (mtu < cur_mtu) {
-                err = TUNA_MTU_TOO_SMALL;
-            } else if (mtu > cur_mtu) {
-                err = TUNA_MTU_TOO_BIG;
-            } else {
-                err = TUNA_UNEXPECTED;
-            }
+        if (mtu < cur_mtu) {
+            err = TUNA_MTU_TOO_SMALL;
+        } else if (mtu > cur_mtu) {
+            err = TUNA_MTU_TOO_BIG;
         } else {
-            err = tuna_priv_translate_nlerr(-err);
+            err = TUNA_UNEXPECTED;
         }
+        goto fail;
+      default:;
+        err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }
 
