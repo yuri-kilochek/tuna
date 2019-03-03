@@ -118,10 +118,10 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
         goto fail;
     }
 
-  done:
+  done:;
     nlmsg_free(nl_msg);
     return err;
-  fail:
+  fail:;
     goto done;
 }
 
@@ -358,7 +358,7 @@ tuna_set_name(tuna_device *dev, char const *name) {
       case -NLE_INVAL:;
         err = TUNA_INVALID_NAME;
         goto fail;
-      case -NLE_BUSY:
+      case -NLE_BUSY:;
         err = TUNA_DEVICE_BUSY;
         goto fail;
       default:;
@@ -459,7 +459,7 @@ tuna_priv_addr_from_nl(tuna_address *addr, struct nl_addr *nl_addr) {
         memcpy(addr->ip6.value, nl_addr_get_binary_addr(nl_addr), 16);
         addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
         return 1;
-      default:
+      default:;
         return 0;
     }
 }
@@ -550,9 +550,9 @@ tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
 
     *nl_address = nl_addr;
 
-  done:
+  done:;
     return err;
-  fail:
+  fail:;
     nl_addr_put(nl_addr);
     goto done;
 }
@@ -611,12 +611,12 @@ tuna_remove_address(tuna_device *dev, tuna_address const *addr) {
     }
 
     switch ((err = rtnl_addr_delete(dev->nl_sock, rtnl_addr, 0))) {
-      case 0:
+      case 0:;
         break;
-      case -NLE_NOADDR:
+      case -NLE_NOADDR:;
         err = 0;
         break;
-      default:
+      default:;
         err = tuna_priv_translate_nlerr(-err);
         goto fail;
     }
