@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 3.8)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
+include(AddResourceLibrary)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 project(tuna VERSION ${PROJECT_VERSION})
@@ -36,7 +37,10 @@ target_sources(tuna PRIVATE
     $<$<PLATFORM_ID:Linux>:src/linux.c>
 )
 
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+if(CMAKE_SYSTEM_NAME STREQUAL Windows)
+    add_resource_library(foo tuna/rc.h)
+    add_resource(foo )
+elseif(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE
         libnl::libnl
