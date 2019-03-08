@@ -3,28 +3,32 @@ cmake_minimum_required(VERSION 3.8)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
-include(AddResourceLibrary)
+include(EmbedResource)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 project(tuna VERSION ${PROJECT_VERSION})
 
-add_library(tuna)
+add_library(tuna
+    src/version.c
+    src/error.c
+    $<$<PLATFORM_ID:Linux>:src/linux.c>
+)
 
 set_target_properties(tuna PROPERTIES
     VERSION ${PROJECT_VERSION}
 )
 
-string(CONFIGURE [=[
-    set(MAJOR_VERSION ${PROJECT_VERSION_MAJOR})
-    set(MINOR_VERSION ${PROJECT_VERSION_MINOR})
-    set(PATCH_VERSION ${PROJECT_VERSION_PATCH})
-    configure_file("${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in"
-                   "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h")
-]=] CONFIGURE_SCRIPT)
-file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/configure.cmake" "${CONFIGURE_SCRIPT}")
+set(CONFIGURE "${CMAKE_CURRENT_BINARY_DIR}/configure.cmake")
+file(WRITE "${CONFIGURE}"
+    "set(MAJOR_VERSION ${PROJECT_VERSION_MAJOR})\n"
+    "set(MINOR_VERSION ${PROJECT_VERSION_MINOR})\n"
+    "set(PATCH_VERSION ${PROJECT_VERSION_PATCH})\n"
+    "configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in\"\n"
+    "               \"${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h\")\n"
+)
 add_custom_command(
     MAIN_DEPENDENCY include/tuna.h.in
-    VERBATIM COMMAND "${CMAKE_COMMAND}" -P configure.cmake
+    VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${CONFIGURE}"
     OUTPUT include/tuna.h
 )
 target_include_directories(tuna PUBLIC
@@ -32,14 +36,10 @@ target_include_directories(tuna PUBLIC
 )
 target_sources(tuna PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
-    src/version.c
-    src/error.c
-    $<$<PLATFORM_ID:Linux>:src/linux.c>
 )
 
+embed_resource(tuna tuna/driver.h CMakeLists.txt tuna_driver_sys)
 if(CMAKE_SYSTEM_NAME STREQUAL Windows)
-    add_resource_library(foo tuna/rc.h)
-    add_resource(foo )
 elseif(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE
