@@ -9,13 +9,9 @@
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
-//#include <netinet/in.h>
 #include <netlink/socket.h>
 #include <netlink/route/link.h>
 #include <netlink/route/addr.h>
-
-// TODO: delete
-#include <stdio.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
