@@ -3,8 +3,15 @@ function(embed_resource TARGET BUNDLE_HEADER RESOURCE NAME)
     string(MD5 TAG "${RESOURCE}")
     set(NAMESPACE "${CMAKE_BINARY_DIR}/embedded_resources/${TAG}")
 
-    set(SOURCE "${NAMESPACE}.c")
+    get_target_property(SOURCES "${TARGET}" SOURCES)
+
     set(HEADER "${NAMESPACE}.h")
+    set(SOURCE "${NAMESPACE}.c")
+
+    list(FIND SOURCES "${SOURCE}" INDEX)
+    if(INDEX EQUAL -1)
+        target_sources("${TARGET}" PRIVATE "${SOURCE}")
+    endif()
 
     set(SOURCIFY "${NAMESPACE}.cmake")
     file(WRITE "${SOURCIFY}"
@@ -16,8 +23,8 @@ function(embed_resource TARGET BUNDLE_HEADER RESOURCE NAME)
         ")\n"
         "set(NAME \"embedded_resource_${TAG}\")\n"
         "file(WRITE \"${HEADER}\"\n"
-        "    \"#ifndef INCLUDE_${TAG}\\n\"\n"
-        "    \"#define INCLUDE_${TAG}\\n\"\n"
+        "    \"#ifndef INCLUDE_GUARD_${TAG}\\n\"\n"
+        "    \"#define INCLUDE_GUARD_${TAG}\\n\"\n"
         "    \"extern unsigned char const \${NAME}[\${SIZE}];\\n\"\n"
         "    \"#endif\\n\"\n"
         ")\n"
@@ -30,13 +37,6 @@ function(embed_resource TARGET BUNDLE_HEADER RESOURCE NAME)
         VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${SOURCIFY}"
         OUTPUT "${SOURCE}" "${HEADER}"
     )
-
-    get_target_property(SOURCES "${TARGET}" SOURCES)
-
-    list(FIND SOURCES "${SOURCE}" INDEX)
-    if(INDEX EQUAL -1)
-        target_sources("${TARGET}" PRIVATE "${HEADER}" "${SOURCE}")
-    endif()
 
     set(INCLUDE "${CMAKE_CURRENT_BINARY_DIR}/embedded_resources/${TARGET}")
     set(BUNDLE_HEADER "${INCLUDE}/${BUNDLE_HEADER}")
