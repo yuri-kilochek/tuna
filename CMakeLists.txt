@@ -46,6 +46,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL Linux)
 endif()
 
 embed_resource(tuna tuna/driver.h CMakeLists.txt tuna_driver_sys)
+embed_resource(tuna tuna/driver.h conanfile.py tuna_driver_inf)
 
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(tuna 
