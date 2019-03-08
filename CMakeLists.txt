@@ -38,14 +38,14 @@ target_sources(tuna PRIVATE
     "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
 )
 
-embed_resource(tuna tuna/driver.h CMakeLists.txt tuna_driver_sys)
-if(CMAKE_SYSTEM_NAME STREQUAL Windows)
-elseif(CMAKE_SYSTEM_NAME STREQUAL Linux)
+if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE
         libnl::libnl
     )
 endif()
+
+embed_resource(tuna tuna/driver.h CMakeLists.txt tuna_driver_sys)
 
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(tuna 

@@ -1,7 +1,7 @@
 function(embed_resource TARGET BUNDLE_HEADER RESOURCE NAME)
     get_filename_component(RESOURCE "${RESOURCE}" ABSOLUTE)
     string(MD5 TAG "${RESOURCE}")
-    set(NAMESPACE "${CMAKE_CURRENT_BINARY_DIR}/${TAG}")
+    set(NAMESPACE "${CMAKE_BINARY_DIR}/${TAG}")
 
     set(SOURCE "${NAMESPACE}.c")
     set(HEADER "${NAMESPACE}.h")
@@ -15,19 +15,33 @@ function(embed_resource TARGET BUNDLE_HEADER RESOURCE NAME)
         " RESOURCE \"\${RESOURCE}\""
         ")\n"
         "file(WRITE \"${HEADER}\"\n"
-        "    \"extern unsigned char const data_${TAG}[\${SIZE}];\\n\"\n"
+        "    \"#ifndef INCLUDE_${TAG}\\n\"\n"
+        "    \"#define INCLUDE_${TAG}\\n\"\n"
+        "    \"extern unsigned char const bytes_${TAG}[\${SIZE}];\\n\"\n"
+        "    \"#endif\\n\"\n"
         ")\n"
         "file(WRITE \"${SOURCE}\"\n"
-        "    \"unsigned char const data_${TAG}[]={\${RESOURCE}};\\n\"\n"
+        "    \"unsigned char const bytes_${TAG}[] = {\${RESOURCE}};\\n\"\n"
         ")\n"
     )
     add_custom_command(
-        MAIN_DEPENDENCY "${RESOURCE}"
+        MAIN_DEPENDENCY "${RESOURCE}" DEPENDS "${SOURCIFY}"
         VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${SOURCIFY}"
         OUTPUT "${SOURCE}" "${HEADER}"
     )
-    target_sources(${TARGET} PRIVATE "${HEADER}" "${SOURCE}")
 
+    get_target_property(SOURCES "${TARGET}" SOURCES)
+    list(FIND "${SOURCES}" "${SOURCE}" INDEX)
+    if(INDEX EQUAL -1)
+        target_sources(${TARGET} PRIVATE "${HEADER}" "${SOURCE}")
+
+
+
+        # ...
+
+
+
+    endif()
 
 
 endfunction()
