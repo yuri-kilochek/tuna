@@ -2,4 +2,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-tuna_version const tuna_linked_version = TUNA_INCLUDED_VERSION;
+tuna_version
+tuna_get_linked_version(void) {
+    return TUNA_INCLUDED_VERSION;
+}

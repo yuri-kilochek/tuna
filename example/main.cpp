@@ -9,6 +9,21 @@
 #include <iomanip>
 
 int main() {
+    {
+        tuna_version v = TUNA_INCLUDED_VERSION;
+        std::cout << "included version: "
+                  << TUNA_GET_MAJOR_VERSION(v) << "." 
+                  << TUNA_GET_MINOR_VERSION(v) << "." 
+                  << TUNA_GET_PATCH_VERSION(v) << "\n";
+    }
+    {
+        tuna_version v = tuna_get_linked_version();
+        std::cout << "linked version: "
+                  << TUNA_GET_MAJOR_VERSION(v) << "." 
+                  << TUNA_GET_MINOR_VERSION(v) << "." 
+                  << TUNA_GET_PATCH_VERSION(v) << "\n";
+    }
+
     tuna_device* device;
     switch (auto e = tuna_create_device(&device)) {
       case 0:

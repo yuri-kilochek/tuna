@@ -59,8 +59,9 @@ typedef uint_least32_t tuna_version;
 #define TUNA_INCLUDED_VERSION \
     TUNA_COMPOSE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION})
 
-TUNA_PRIV_API extern
-tuna_version const tuna_linked_version;
+TUNA_PRIV_API
+tuna_version
+tuna_get_linked_version(void);
 
 ///////////////////////////////////////////////////////////////////////////////
 
