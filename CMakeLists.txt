@@ -3,7 +3,6 @@ cmake_minimum_required(VERSION 3.8)
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 include(GNUInstallDirs)
-include(EmbedResource)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 project(tuna VERSION ${PROJECT_VERSION})
@@ -44,9 +43,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL Linux)
         libnl::libnl
     )
 endif()
-
-embed_resource(tuna tuna/driver.h CMakeLists.txt tuna_driver_sys)
-embed_resource(tuna tuna/driver.h conanfile.py tuna_driver_inf)
 
 if(BUILD_SHARED_LIBS)
     target_compile_definitions(tuna 
