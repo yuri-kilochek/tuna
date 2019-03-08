@@ -3,26 +3,25 @@ from conans import ConanFile, tools, CMake
 class TunaConan(ConanFile):
     name = 'tuna'
     version = tools.load('VERSION').strip()
-    settings = (
-        'os',
-        'compiler',
-        'build_type',
-        'arch',
-    )
+
+    settings = 'os', 'compiler', 'build_type', 'arch'
     options = {
         'shared': [False, True],
+        'fPIC': [False, True],
     }
     default_options = {
-        'shared': True,        
+        'shared': True,
+        'fPIC': False,
     }
-    exports = (
-        'VERSION',
-    )
+
     exports_sources = (
         'CMakeLists.txt',
         'cmake/*',
         'include/*',
         'src/*',
+    )
+    exports = (
+        'VERSION',
     )
     generators = (
         'cmake_find_package',
