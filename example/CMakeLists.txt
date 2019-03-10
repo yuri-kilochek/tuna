@@ -11,9 +11,9 @@ set_target_properties(example PROPERTIES
     CXX_STANDARD_REQUIRED YES
 )
 
-find_package(Boost REQUIRED)
+find_package(boost REQUIRED)
 target_link_libraries(example PRIVATE
-    Boost::boost
+    boost::boost
 )
 
 find_package(tuna REQUIRED)
