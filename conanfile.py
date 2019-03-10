@@ -17,6 +17,7 @@ class TunaConan(ConanFile):
     exports_sources = (
         'CMakeLists.txt',
         'cmake/*',
+        'deps/tap-windows/*',
         'include/*',
         'src/*',
     )
