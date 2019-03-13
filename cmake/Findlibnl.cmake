@@ -24,9 +24,7 @@ if(_nl_INCLUDE_DIR AND _nl_LIBRARY AND _nl-route_LIBRARY)
     set(libnl_FOUND YES)
 
     add_library(libnl::libnl INTERFACE IMPORTED)
-    target_include_directories(libnl::libnl INTERFACE
-        "${_nl_INCLUDE_DIR}"
-    )
+    target_include_directories(libnl::libnl INTERFACE "${_nl_INCLUDE_DIR}")
     target_link_libraries(libnl::libnl INTERFACE
         "${_nl_LIBRARY}"
         "${_nl-route_LIBRARY}"

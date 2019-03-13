@@ -1,21 +1,16 @@
 cmake_minimum_required(VERSION 3.8)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
-
-include(GNUInstallDirs)
-
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 project(tuna VERSION ${PROJECT_VERSION})
 
 add_library(tuna
+    "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
     src/version.c
     src/error.c
     $<$<PLATFORM_ID:Linux>:src/linux.c>
 )
 
-set_target_properties(tuna PROPERTIES
-    VERSION ${PROJECT_VERSION}
-)
+set_target_properties(tuna PROPERTIES VERSION ${PROJECT_VERSION})
 
 set(CONFIGURE "${CMAKE_CURRENT_BINARY_DIR}/configure.cmake")
 file(WRITE "${CONFIGURE}"
@@ -33,35 +28,29 @@ add_custom_command(
 target_include_directories(tuna PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
 )
-target_sources(tuna PRIVATE
-    "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
-)
 
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(libnl REQUIRED)
-    target_link_libraries(tuna PRIVATE
-        libnl::libnl
-    )
+    target_link_libraries(tuna PRIVATE libnl::libnl)
 endif()
 
 if(BUILD_SHARED_LIBS)
+    set_target_properties(tuna PROPERTIES C_VISIBILITY_PRESET hidden)
     target_compile_definitions(tuna 
         PRIVATE TUNA_EXPORT
         INTERFACE TUNA_IMPORT
     )
-    set_target_properties(tuna PROPERTIES
-        C_VISIBILITY_PRESET hidden
-    )
 endif()
 
+include(GNUInstallDirs)
 target_include_directories(tuna PUBLIC
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
 )
-install(TARGETS tuna
-    EXPORT tuna
+install(TARGETS tuna EXPORT tuna
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}"
