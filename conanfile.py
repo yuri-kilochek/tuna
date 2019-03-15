@@ -10,8 +10,8 @@ class TunaConan(ConanFile):
         'fPIC': [False, True],
     }
     default_options = {
-        'shared': True,
-        'fPIC': False,
+        'shared': False,
+        'fPIC': True,
     }
 
     exports_sources = (
@@ -30,6 +30,14 @@ class TunaConan(ConanFile):
     )
     short_paths = True
     no_copy_source = True
+
+    def config_options(self):
+        if self.settings.os == 'Windows':
+            self.options.remove('fPIC')
+
+    def configure(self):
+        self.settings.compiler.remove('libcxx')
+        self.settings.compiler.remove('exception')
 
     def requirements(self):
         if self.settings.os == 'Linux':
