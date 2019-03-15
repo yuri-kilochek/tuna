@@ -8,6 +8,7 @@ add_library(tuna
     src/version.c
     src/error.c
     $<$<PLATFORM_ID:Linux>:src/linux.c>
+    $<$<PLATFORM_ID:Windows>:src/windows.c>
 )
 
 set_target_properties(tuna PROPERTIES VERSION ${PROJECT_VERSION})
@@ -33,6 +34,9 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE libnl::libnl)
+elseif(CMAKE_SYSTEM_NAME STREQUAL Windows)
+    add_subdirectory(deps/tap-windows)
+    target_link_libraries(tuna PRIVATE tap-windows)
 endif()
 
 if(BUILD_SHARED_LIBS)

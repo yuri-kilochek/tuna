@@ -50,11 +50,12 @@ add_custom_command(
     OUTPUT "${HEADER}" "${INF}" "${CAT}" "${SYS}"
 )
 
-add_library(tap-windows STATIC "${HEADER}")
+add_library(tap-windows INTERFACE IMPORTED GLOBAL)
 
-target_include_directories(tap-windows INTERFACE
-    "$<BUILD_INTERFACE:${INCLUDE_DIR}>"
-)
+file(MAKE_DIRECTORY "${INCLUDE_DIR}")
+target_include_directories(tap-windows INTERFACE "${INCLUDE_DIR}")
+file(TOUCH "${HEADER}")
+target_sources(tap-windows INTERFACE "${HEADER}")
 
 foreach(FILE "${INF}" "${CAT}" "${SYS}")
     file(WRITE "${FILE}.cmake"
@@ -70,7 +71,8 @@ foreach(FILE "${INF}" "${CAT}" "${SYS}")
 
         "file(WRITE \"\${FILE}.c\"\n"
         "    \"#include <stddef.h>\\n\"\n"
-        "    \"char const *tap_windows_\${EXT}_name = \\\"\${NAME}\\\";\\n\"\n"
+        "    \"char const *const tap_windows_\${EXT}_name ="
+                 " \\\"\${NAME}\\\";\\n\"\n"
         "    \"size_t const tap_windows_\${EXT}_size = \${SIZE};\\n\"\n"
         "    \"unsigned char const *const tap_windows_\${EXT}_data ="
                  " (unsigned char const[]){\${DATA}};\\n\"\n"
@@ -82,5 +84,16 @@ foreach(FILE "${INF}" "${CAT}" "${SYS}")
         OUTPUT "${FILE}.c"
     )
 
-    target_sources(tap-windows PRIVATE "${FILE}.c")
+    file(TOUCH "${FILE}.c")
+    target_sources(tap-windows INTERFACE "${FILE}.c")
 endforeach()
+
+# This silliness is only required because CMake (as of 3.14) is apparently
+# unable to track dependencies through INTERFACE_SOURCES of an INTERFACE
+# library. And we also can't just make tap-windows a regular library because
+# then CMake will force us to export it, even though it is fully internal.
+add_custom_target(tap-windows-gen
+    COMMENT ""
+    DEPENDS "${HEADER}" "${INF}.c" "${CAT}.c" "${SYS}.c"
+)
+add_dependencies(tap-windows tap-windows-gen)
