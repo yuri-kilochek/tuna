@@ -9,6 +9,7 @@
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
+
 #include <netlink/socket.h>
 #include <netlink/route/link.h>
 #include <netlink/route/addr.h>
@@ -81,14 +82,14 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
         goto fail;
     }
 
-    struct nlattr *ifla_af_spec_nlarrt;
-    if (!(ifla_af_spec_nlarrt = nla_nest_start(nl_msg, IFLA_AF_SPEC))) {
+    struct nlattr *ifla_af_spec_nlattr;
+    if (!(ifla_af_spec_nlattr = nla_nest_start(nl_msg, IFLA_AF_SPEC))) {
         err = TUNA_OUT_OF_MEMORY;
         goto fail;
     }
 
-    struct nlattr *af_inet6_nlarrt;
-    if (!(af_inet6_nlarrt = nla_nest_start(nl_msg, AF_INET6))) {
+    struct nlattr *af_inet6_nlattr;
+    if (!(af_inet6_nlattr = nla_nest_start(nl_msg, AF_INET6))) {
         err = TUNA_OUT_OF_MEMORY;
         goto fail;
     }
@@ -100,9 +101,9 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
         goto fail;
     }
 
-    nla_nest_end(nl_msg, af_inet6_nlarrt);
+    nla_nest_end(nl_msg, af_inet6_nlattr);
 
-    nla_nest_end(nl_msg, ifla_af_spec_nlarrt);
+    nla_nest_end(nl_msg, ifla_af_spec_nlattr);
 
     if ((err = nl_send_auto(dev->nl_sock, nl_msg)) < 0) {
         err = tuna_priv_translate_nlerr(-err);
