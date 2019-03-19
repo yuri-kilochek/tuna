@@ -6,17 +6,11 @@ add_executable(example
     main.cpp    
 )
 
-set_target_properties(example PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED YES
-)
-
-find_package(boost REQUIRED)
-target_link_libraries(example PRIVATE
-    boost::boost
-)
+target_compile_features(example PRIVATE cxx_std_11)
 
 find_package(tuna REQUIRED)
+find_package(boost REQUIRED)
 target_link_libraries(example PRIVATE
     tuna::tuna
+    boost::boost
 )
