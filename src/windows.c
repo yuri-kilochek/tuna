@@ -28,3 +28,15 @@ extern
 size_t const tap_windows_sys_size;
 extern
 unsigned char const *const tap_windows_sys_data;
+
+tuna_error
+tuna_create_device(tuna_device **lpDevice) {
+    return 0;
+}
+
+void
+tuna_destroy_device(tuna_device *lpDevice) {
+
+}
+
+
