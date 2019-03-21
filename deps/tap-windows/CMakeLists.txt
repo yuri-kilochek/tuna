@@ -60,22 +60,28 @@ target_sources(tap-windows INTERFACE "${HEADER}")
 foreach(FILE "${INF}" "${CAT}" "${SYS}")
     file(WRITE "${FILE}.cmake"
         "set(FILE \"${FILE}\")\n"
+
+        "get_filename_component(NAME \"\${FILE}\" NAME)\n"
+        "get_filename_component(EXT \"\${NAME}\" EXT)\n"
+        "string(SUBSTRING \"\${EXT}\" 1 1 E)\n"
+        "string(SUBSTRING \"\${EXT}\" 2 -1 XT)\n"
+        "string(TOUPPER \"\${E}\" E)\n"
+        "string(TOLOWER \"\${XT}\" XT)\n"
+        "set(EXT \"\${E}\${XT}\")\n"
+
+
         "file(READ \"\${FILE}\" DATA HEX)\n"
         "string(LENGTH \${DATA} DOUBLE_SIZE)\n"
         "math(EXPR SIZE \"\${DOUBLE_SIZE} / 2\")\n"
         "string(REGEX REPLACE \"(..)\" \"0x\\\\1,\" DATA \${DATA})\n"
 
-        "get_filename_component(NAME \"\${FILE}\" NAME)\n"
-        "get_filename_component(EXT \"\${NAME}\" EXT)\n"
-        "string(SUBSTRING \${EXT} 1 -1 EXT)\n"
-
         "file(WRITE \"\${FILE}.c\"\n"
         "    \"#include <stddef.h>\\n\"\n"
-        "    \"char const *const tap_windows_\${EXT}_name ="
-                 " \\\"\${NAME}\\\";\\n\"\n"
-        "    \"size_t const tap_windows_\${EXT}_size = \${SIZE};\\n\"\n"
-        "    \"unsigned char const *const tap_windows_\${EXT}_data ="
-                 " (unsigned char const[]){\${DATA}};\\n\"\n"
+        "    \"char const *const pszTapWindows\${EXT}FileName = "
+                 "\\\"\${NAME}\\\";\\n\"\n"
+        "    \"size_t const cbTapWindows\${EXT}FileSize = \${SIZE};\\n\"\n"
+        "    \"unsigned char const *const pTapWindows\${EXT}FileData = "
+                 "(unsigned char const[]){\${DATA}};\\n\"\n"
         ")\n"
     )
     add_custom_command(
