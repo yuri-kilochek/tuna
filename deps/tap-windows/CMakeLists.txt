@@ -28,6 +28,7 @@ set(CONTENT_DIR "${CMAKE_CURRENT_BINARY_DIR}/${NAME}")
 
 set(INCLUDE_DIR "${CONTENT_DIR}/include")
 set(HEADER "${INCLUDE_DIR}/tap-windows.h")
+set(EMBEDDED_FILES_HEADER "${INCLUDE_DIR}/tap-windows-embedded-files.h")
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(ARCH amd64)
@@ -55,20 +56,35 @@ add_library(tap-windows INTERFACE IMPORTED GLOBAL)
 file(MAKE_DIRECTORY "${INCLUDE_DIR}")
 target_include_directories(tap-windows INTERFACE "${INCLUDE_DIR}")
 file(TOUCH "${HEADER}")
-target_sources(tap-windows INTERFACE "${HEADER}")
+file(WRITE "${EMBEDDED_FILES_HEADER}"
+    "#ifndef TAP_WINDOWS_EMBEDDED_FILES_INCLUDED\n"
+    "#define TAP_WINDOWS_EMBEDDED_FILES_INCLUDED\n"
+
+    "#include <stddef.h>\n"
+
+    "typedef struct {\n"
+    "    char const *pszName;\n"
+    "    size_t cbSize;\n"
+    "    unsigned char const *pData;\n"
+    "} TAP_WINDOWS_EMBEDDED_FILE;\n"
+)
 
 foreach(FILE "${INF}" "${CAT}" "${SYS}")
+    get_filename_component(EXT "${FILE}" EXT)
+    string(SUBSTRING "${EXT}" 1 1 E)
+    string(SUBSTRING "${EXT}" 2 -1 XT)
+    string(TOUPPER "${E}" E)
+    set(EXT "${E}${XT}")
+
+    set(DECL "TAP_WINDOWS_EMBEDDED_FILE const g_TapWindowsEmbedded${EXT}File")
+
+    file(APPEND "${EMBEDDED_FILES_HEADER}"
+        "extern ${DECL};\n"
+    )
     file(WRITE "${FILE}.cmake"
         "set(FILE \"${FILE}\")\n"
 
         "get_filename_component(NAME \"\${FILE}\" NAME)\n"
-        "get_filename_component(EXT \"\${NAME}\" EXT)\n"
-        "string(SUBSTRING \"\${EXT}\" 1 1 E)\n"
-        "string(SUBSTRING \"\${EXT}\" 2 -1 XT)\n"
-        "string(TOUPPER \"\${E}\" E)\n"
-        "string(TOLOWER \"\${XT}\" XT)\n"
-        "set(EXT \"\${E}\${XT}\")\n"
-
 
         "file(READ \"\${FILE}\" DATA HEX)\n"
         "string(LENGTH \${DATA} DOUBLE_SIZE)\n"
@@ -76,12 +92,13 @@ foreach(FILE "${INF}" "${CAT}" "${SYS}")
         "string(REGEX REPLACE \"(..)\" \"0x\\\\1,\" DATA \${DATA})\n"
 
         "file(WRITE \"\${FILE}.c\"\n"
-        "    \"#include <stddef.h>\\n\"\n"
-        "    \"char const *const pszTapWindows\${EXT}FileName = "
-                 "\\\"\${NAME}\\\";\\n\"\n"
-        "    \"size_t const cbTapWindows\${EXT}FileSize = \${SIZE};\\n\"\n"
-        "    \"unsigned char const *const pTapWindows\${EXT}FileData = "
-                 "(unsigned char const[]){\${DATA}};\\n\"\n"
+        "    \"#include <${EMBEDDED_FILES_HEADER}>\\n\"\n"
+        
+        "    \"${DECL} = {\\n\"\n"
+        "    \"    .pszName = \\\"\${NAME}\\\",\\n\"\n"
+        "    \"    .cbSize = \${SIZE},\\n\"\n"
+        "    \"    .pData = (unsigned char const[]){\${DATA}},\\n\"\n"
+        "    \"};\\n\"\n"
         ")\n"
     )
     add_custom_command(
@@ -93,6 +110,11 @@ foreach(FILE "${INF}" "${CAT}" "${SYS}")
     file(TOUCH "${FILE}.c")
     target_sources(tap-windows INTERFACE "${FILE}.c")
 endforeach()
+
+file(APPEND "${EMBEDDED_FILES_HEADER}"
+    "#endif\n"
+)
+target_sources(tap-windows INTERFACE "${HEADER}" "${EMBEDDED_FILES_HEADER}")
 
 # This silliness is only required because CMake (as of 3.14) is apparently
 # unable to track dependencies through INTERFACE_SOURCES of an INTERFACE
