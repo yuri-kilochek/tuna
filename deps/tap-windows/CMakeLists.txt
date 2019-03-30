@@ -20,6 +20,7 @@ file(WRITE "${DOWNLOAD}"
 )
 add_custom_command(
     COMMENT "Downloading ${URL}"
+    DEPENDS "${DOWNLOAD}"
     VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${DOWNLOAD}"
     OUTPUT "${ARCHIVE}"
 )
@@ -28,7 +29,7 @@ set(CONTENT_DIR "${CMAKE_CURRENT_BINARY_DIR}/${NAME}")
 
 set(INCLUDE_DIR "${CONTENT_DIR}/include")
 set(HEADER "${INCLUDE_DIR}/tap-windows.h")
-set(EMBEDDED_FILES_HEADER "${INCLUDE_DIR}/tap-windows-embedded-files.h")
+set(EMBEDDED_FILES_HEADER "${INCLUDE_DIR}/embedded-tap-windows-files.h")
 
 if(CMAKE_SIZEOF_VOID_P EQUAL 8)
     set(ARCH amd64)
@@ -57,29 +58,28 @@ file(MAKE_DIRECTORY "${INCLUDE_DIR}")
 target_include_directories(tap-windows INTERFACE "${INCLUDE_DIR}")
 file(TOUCH "${HEADER}")
 file(WRITE "${EMBEDDED_FILES_HEADER}"
-    "#ifndef TAP_WINDOWS_EMBEDDED_FILES_INCLUDED\n"
-    "#define TAP_WINDOWS_EMBEDDED_FILES_INCLUDED\n"
+    "#ifndef EMBEDDED_TAP_WINDOWS_FILES_INCLUDED\n"
+    "#define EMBEDDED_TAP_WINDOWS_FILES_INCLUDED\n"
 
     "#include <stddef.h>\n"
 
     "typedef struct {\n"
-    "    char const *pszName;\n"
-    "    size_t cbSize;\n"
-    "    unsigned char const *pData;\n"
-    "} TAP_WINDOWS_EMBEDDED_FILE;\n"
+    "    char const *name;\n"
+    "    size_t size;\n"
+    "    unsigned char const *data;\n"
+    "} embedded_tap_windows_file;\n"
 )
 
 foreach(FILE "${INF}" "${CAT}" "${SYS}")
     get_filename_component(EXT "${FILE}" EXT)
-    string(SUBSTRING "${EXT}" 1 1 E)
-    string(SUBSTRING "${EXT}" 2 -1 XT)
-    string(TOUPPER "${E}" E)
-    set(EXT "${E}${XT}")
+    string(SUBSTRING "${EXT}" 1 -1 EXT)
 
-    set(DECL "TAP_WINDOWS_EMBEDDED_FILE const g_TapWindowsEmbedded${EXT}File")
+    set(DECLARATION
+        "embedded_tap_windows_file const embedded_tap_windows_${EXT}_file"
+    )
 
     file(APPEND "${EMBEDDED_FILES_HEADER}"
-        "extern ${DECL};\n"
+        "extern ${DECLARATION};\n"
     )
     file(WRITE "${FILE}.cmake"
         "set(FILE \"${FILE}\")\n"
@@ -94,15 +94,16 @@ foreach(FILE "${INF}" "${CAT}" "${SYS}")
         "file(WRITE \"\${FILE}.c\"\n"
         "    \"#include <${EMBEDDED_FILES_HEADER}>\\n\"\n"
         
-        "    \"${DECL} = {\\n\"\n"
-        "    \"    .pszName = \\\"\${NAME}\\\",\\n\"\n"
-        "    \"    .cbSize = \${SIZE},\\n\"\n"
-        "    \"    .pData = (unsigned char const[]){\${DATA}},\\n\"\n"
+        "    \"${DECLARATION} = {\\n\"\n"
+        "    \"    .name = \\\"\${NAME}\\\",\\n\"\n"
+        "    \"    .size = \${SIZE},\\n\"\n"
+        "    \"    .data = (unsigned char const[]){\${DATA}},\\n\"\n"
         "    \"};\\n\"\n"
         ")\n"
     )
     add_custom_command(
         MAIN_DEPENDENCY "${FILE}"
+        DEPENDS "${FILE}.cmake"
         VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${FILE}.cmake"
         OUTPUT "${FILE}.c"
     )
