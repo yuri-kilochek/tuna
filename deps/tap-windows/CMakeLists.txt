@@ -126,3 +126,5 @@ add_custom_target(tap-windows-gen
     DEPENDS "${HEADER}" "${INF}.c" "${CAT}.c" "${SYS}.c"
 )
 add_dependencies(tap-windows tap-windows-gen)
+
+add_subdirectory(../embed_windows_driver ../embed_windows_driver)

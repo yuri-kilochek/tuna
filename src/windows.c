@@ -33,6 +33,25 @@ tuna_priv_translate_errcode(DWORD errcode) {
 
 static
 tuna_error
+tuna_priv_get_driver_dir_path(char *path, size_t max_path_size)
+{
+    if (!GetTempPathA((DWORD)max_path_size, path)) {
+        return tuna_priv_translate_errcode(GetLastError());
+    }
+    size_t tmp_path_len = strlen(path);
+    path += tmp_path_len;
+    max_path_size -= tmp_path_len;
+
+    if ((unsigned)snprintf(path, max_path_size,
+                           "TunaDriverFiles%"PRIu32,
+                           (uint32_t)GetCurrentThreadId()) >= max_path_size)
+    { return TUNA_UNEXPECTED; }
+
+    return 0;
+}
+
+static
+tuna_error
 tuna_priv_emit_tap_windows_file(char const *dir_path,
                                 embedded_tap_windows_file const *embedded_file)
 {
@@ -75,26 +94,6 @@ tuna_priv_emit_tap_windows_file(char const *dir_path,
     goto done;
 }
 
-
-static
-tuna_error
-tuna_priv_get_tap_windows_files_dir_path(char *path,
-                                         size_t path_size)
-{
-    if (!GetTempPathA((DWORD)path_size, path)) {
-        return tuna_priv_translate_errcode(GetLastError());
-    }
-    size_t tmp_path_len = strlen(path);
-    path += tmp_path_len;
-    path_size -= tmp_path_len;
-
-    if ((unsigned)snprintf(path, path_size,
-                           "Tuna-TapWindowsFiles-%"PRIu32,
-                           (uint32_t)GetCurrentThreadId()) >= path_size)
-    { return TUNA_UNEXPECTED; }
-
-    return 0;
-}
 
 //static
 //tuna_error
