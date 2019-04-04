@@ -1,5 +1,5 @@
-#ifndef EMBEDDED_FILE_PRIV_INCLUDED
-#define EMBEDDED_FILE_PRIV_INCLUDED
+#ifndef TUNA_PRIV_EMBEDDED_FILE_INCLUDED
+#define TUNA_PRIV_EMBEDDED_FILE_INCLUDED
 
 #include <stddef.h>
 
@@ -7,6 +7,6 @@ typedef struct {
     char const *name;
     size_t size;
     unsigned char const *data;
-} embedded_file;
+} tuna_embedded_file;
 
 #endif
