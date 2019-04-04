@@ -1,53 +1,30 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 3.11)
+
+list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
+include(GNUInstallDirs)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" PROJECT_VERSION)
 project(tuna VERSION ${PROJECT_VERSION})
 
-add_library(tuna
-    "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
-    src/version.c
-    src/error.c
-    $<$<PLATFORM_ID:Linux>:src/linux.c>
-    $<$<PLATFORM_ID:Windows>:src/windows.c>
-)
+add_library(tuna)
 
 set_target_properties(tuna PROPERTIES VERSION ${PROJECT_VERSION})
+if(BUILD_SHARED_LIBS)
+    set_target_properties(tuna PROPERTIES C_VISIBILITY_PRESET hidden)
+    target_compile_definitions(tuna PRIVATE TUNA_EXPORT INTERFACE TUNA_IMPORT)
+endif()
 
-set(CONFIGURE "${CMAKE_CURRENT_BINARY_DIR}/configure.cmake")
-file(WRITE "${CONFIGURE}"
-    "set(MAJOR_VERSION ${PROJECT_VERSION_MAJOR})\n"
-    "set(MINOR_VERSION ${PROJECT_VERSION_MINOR})\n"
-    "set(PATCH_VERSION ${PROJECT_VERSION_PATCH})\n"
-    "configure_file(\"${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in\"\n"
-    "               \"${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h\")\n"
-)
-add_custom_command(
-    MAIN_DEPENDENCY include/tuna.h.in
-    VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${CONFIGURE}"
-    OUTPUT include/tuna.h
-)
-target_include_directories(tuna PUBLIC
-    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-)
+add_subdirectory(include)
+add_subdirectory(src)
 
-list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 if(CMAKE_SYSTEM_NAME STREQUAL Linux)
     find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE libnl::libnl)
-elseif(CMAKE_SYSTEM_NAME STREQUAL Windows)
+endif()
+if(CMAKE_SYSTEM_NAME STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
-    target_link_libraries(tuna PRIVATE tap-windows)
 endif()
 
-if(BUILD_SHARED_LIBS)
-    set_target_properties(tuna PROPERTIES C_VISIBILITY_PRESET hidden)
-    target_compile_definitions(tuna 
-        PRIVATE TUNA_EXPORT
-        INTERFACE TUNA_IMPORT
-    )
-endif()
-
-include(GNUInstallDirs)
 target_include_directories(tuna PUBLIC
     "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )

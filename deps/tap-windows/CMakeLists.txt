@@ -52,6 +52,7 @@ add_custom_command(
     OUTPUT "${HEADER}" "${INF}" "${CAT}" "${SYS}"
 )
 
+# TODO: just add sources to tuna here, no need to generate a linkable library.
 add_library(tap-windows INTERFACE IMPORTED GLOBAL)
 
 file(MAKE_DIRECTORY "${INCLUDE_DIR}")
