@@ -1,3 +1,7 @@
+target_include_directories(tuna PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
+
 set(HEADER_IN "${CMAKE_CURRENT_SOURCE_DIR}/tuna.h.in")
 set(HEADER "${CMAKE_CURRENT_BINARY_DIR}/tuna.h")
 set(CONFIGURE "${CMAKE_CURRENT_BINARY_DIR}/configure.cmake")
@@ -25,7 +29,15 @@ add_custom_command(
     COMMAND "${CMAKE_COMMAND}" -P "${CONFIGURE}"
     OUTPUT "${HEADER}"
 )
+file(TOUCH "${HEADER}")
 target_sources(tuna PRIVATE "${HEADER}")
 target_include_directories(tuna PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
 )
+
+# CMake can't track file dependencies in subdirectories :<
+add_custom_target(tuna_header
+    COMMENT ""
+    DEPENDS "${HEADER}"
+)
+add_dependencies(tuna tuna_header)

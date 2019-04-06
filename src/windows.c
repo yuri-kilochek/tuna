@@ -1,4 +1,5 @@
 #include <tuna.h>
+#include <tuna/priv/windows/embedded_driver.h>
 
 #include <stdint.h>
 #include <inttypes.h>
@@ -10,7 +11,6 @@
 #include <shlwapi.h>
 
 #include <tap-windows.h>
-#include <embedded-tap-windows-files.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -19,6 +19,11 @@
 struct tuna_device {
     HANDLE hFile;
 };
+
+void foo() {
+    extern
+    tuna_embedded_driver const tuna_tap_windows;
+}
 
 static
 tuna_error
@@ -31,68 +36,68 @@ tuna_priv_translate_errcode(DWORD errcode) {
     }
 }
 
-static
-tuna_error
-tuna_priv_get_driver_dir_path(char *path, size_t max_path_size)
-{
-    if (!GetTempPathA((DWORD)max_path_size, path)) {
-        return tuna_priv_translate_errcode(GetLastError());
-    }
-    size_t tmp_path_len = strlen(path);
-    path += tmp_path_len;
-    max_path_size -= tmp_path_len;
-
-    if ((unsigned)snprintf(path, max_path_size,
-                           "TunaDriverFiles%"PRIu32,
-                           (uint32_t)GetCurrentThreadId()) >= max_path_size)
-    { return TUNA_UNEXPECTED; }
-
-    return 0;
-}
-
-static
-tuna_error
-tuna_priv_emit_tap_windows_file(char const *dir_path,
-                                embedded_tap_windows_file const *embedded_file)
-{
-    HANDLE file_handle = INVALID_HANDLE_VALUE;
-
-    tuna_error err = 0;
-
-    char file_path[MAX_PATH];
-    if (!PathCombineA(file_path, dir_path, embedded_file->name)) {
-        err = TUNA_UNEXPECTED;
-        goto fail;
-    }
-
-    if ((file_handle = CreateFile(file_path,
-                                  GENERIC_WRITE,
-                                  0,
-                                  NULL,
-                                  CREATE_ALWAYS,
-                                  FILE_ATTRIBUTE_TEMPORARY,
-                                  NULL)) == INVALID_HANDLE_VALUE)
-    {
-        err = tuna_priv_translate_errcode(GetLastError());
-        goto fail;
-    }
-
-    if (!WriteFile(file_handle,
-                   embedded_file->data,
-                   (DWORD)embedded_file->size,
-                   &(DWORD){0},
-                   NULL))
-    {
-        err = tuna_priv_translate_errcode(GetLastError());
-        goto fail;
-    }
-
-  done:;
-    if (file_handle != INVALID_HANDLE_VALUE) { CloseHandle(file_handle); }
-    return err;
-  fail:;
-    goto done;
-}
+//static
+//tuna_error
+//tuna_priv_get_driver_dir_path(char *path, size_t max_path_size)
+//{
+//    if (!GetTempPathA((DWORD)max_path_size, path)) {
+//        return tuna_priv_translate_errcode(GetLastError());
+//    }
+//    size_t tmp_path_len = strlen(path);
+//    path += tmp_path_len;
+//    max_path_size -= tmp_path_len;
+//
+//    if ((unsigned)snprintf(path, max_path_size,
+//                           "TunaDriverFiles%"PRIu32,
+//                           (uint32_t)GetCurrentThreadId()) >= max_path_size)
+//    { return TUNA_UNEXPECTED; }
+//
+//    return 0;
+//}
+//
+//static
+//tuna_error
+//tuna_priv_emit_tap_windows_file(char const *dir_path,
+//                                embedded_tap_windows_file const *embedded_file)
+//{
+//    HANDLE file_handle = INVALID_HANDLE_VALUE;
+//
+//    tuna_error err = 0;
+//
+//    char file_path[MAX_PATH];
+//    if (!PathCombineA(file_path, dir_path, embedded_file->name)) {
+//        err = TUNA_UNEXPECTED;
+//        goto fail;
+//    }
+//
+//    if ((file_handle = CreateFile(file_path,
+//                                  GENERIC_WRITE,
+//                                  0,
+//                                  NULL,
+//                                  CREATE_ALWAYS,
+//                                  FILE_ATTRIBUTE_TEMPORARY,
+//                                  NULL)) == INVALID_HANDLE_VALUE)
+//    {
+//        err = tuna_priv_translate_errcode(GetLastError());
+//        goto fail;
+//    }
+//
+//    if (!WriteFile(file_handle,
+//                   embedded_file->data,
+//                   (DWORD)embedded_file->size,
+//                   &(DWORD){0},
+//                   NULL))
+//    {
+//        err = tuna_priv_translate_errcode(GetLastError());
+//        goto fail;
+//    }
+//
+//  done:;
+//    if (file_handle != INVALID_HANDLE_VALUE) { CloseHandle(file_handle); }
+//    return err;
+//  fail:;
+//    goto done;
+//}
 
 
 //static
