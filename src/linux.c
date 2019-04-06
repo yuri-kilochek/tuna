@@ -124,12 +124,12 @@ tuna_disable_default_local_ip6_addr(tuna_device *dev) {
 
 tuna_error
 tuna_create_device(tuna_device **device) {
+    tuna_device *dev = NULL;
     struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;
 
-    tuna_device *dev = malloc(sizeof(*dev));
-    if (!dev) {
+    if (!(dev = malloc(sizeof(*dev)))) {
         err = TUNA_OUT_OF_MEMORY;
         goto fail;
     }
