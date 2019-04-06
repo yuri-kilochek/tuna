@@ -35,6 +35,13 @@ target_include_directories(tuna PUBLIC
     "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>"
 )
 
+target_include_directories(tuna PUBLIC
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/tuna.h"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+)
+
 # CMake can't track file dependencies in subdirectories :<
 add_custom_target(tuna_header
     COMMENT ""

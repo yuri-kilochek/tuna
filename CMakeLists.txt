@@ -25,12 +25,6 @@ if(CMAKE_SYSTEM_NAME STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
 endif()
 
-target_include_directories(tuna PUBLIC
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
-)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
-)
 install(TARGETS tuna EXPORT tuna
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
     LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}"
