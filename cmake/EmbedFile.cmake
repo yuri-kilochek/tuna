@@ -1,15 +1,15 @@
+include_guard(GLOBAL)
+
+include(WriteFileIfChanged)
+
 function(embed_file TARGET VAR FILE)
     get_filename_component(FILE "${FILE}" ABSOLUTE)
     get_filename_component(NAME "${FILE}" NAME)
 
-    set(DIR "${CMAKE_BINARY_DIR}/EmbeddedFiles")
-    file(MAKE_DIRECTORY "${DIR}")
-
     string(MD5 TAG "${FILE}")
-    set(SOURCE "${DIR}/${TAG}.c")
-    set(SOURCIFY "${DIR}/${TAG}.cmake")
-
-    file(WRITE "${SOURCIFY}.new"
+    set(SOURCE "${CMAKE_BINARY_DIR}/EmbeddedFiles/${TAG}.c")
+    set(SOURCE_GENERATOR "${SOURCE}.generator.cmake")
+    write_file_if_changed("${SOURCE_GENERATOR}"
         "file(READ \"${FILE}\" DATA HEX)\n"
         "string(LENGTH \${DATA} DOUBLE_SIZE)\n"
         "math(EXPR SIZE \"\${DOUBLE_SIZE} / 2\")\n"
@@ -25,32 +25,12 @@ function(embed_file TARGET VAR FILE)
         "    \"};\\n\"\n"
         ")\n"
     )
-    execute_process(
-        ERROR_QUIET
-        COMMAND "${CMAKE_COMMAND}" -E compare_files "${SOURCIFY}.new"
-                                                    "${SOURCIFY}"
-        RESULT_VARIABLE CHANGED
-    )
-    if("${CHANGED}")
-        file(RENAME "${SOURCIFY}.new" "${SOURCIFY}")
-    endif()
-
     add_custom_command(
         COMMENT "Sourcifying ${NAME}"
         MAIN_DEPENDENCY "${FILE}"
-        DEPENDS "${SOURCIFY}"
-        VERBATIM
-        COMMAND "${CMAKE_COMMAND}" -P "${SOURCIFY}"
+        DEPENDS "${SOURCE_GENERATOR}"
+        VERBATIM COMMAND "${CMAKE_COMMAND}" -P "${SOURCE_GENERATOR}"
         OUTPUT "${SOURCE}"
     )
-    file(TOUCH "${SOURCE}")
     target_sources("${TARGET}" PRIVATE "${SOURCE}")
-
-    # CMake can't track file dependencies in subdirectories :<
-    set(SOURCE_TARGET "embedded_file_${TAG}")
-    add_custom_target("${SOURCE_TARGET}"
-        COMMENT ""
-        DEPENDS "${SOURCE}"
-    )
-    add_dependencies("${TARGET}" "${SOURCE_TARGET}")
 endfunction()

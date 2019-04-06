@@ -1,4 +1,7 @@
+include_guard(GLOBAL)
+
 include(EmbedFile)
+include(WriteFileIfChanged)
 
 function(embed_driver TARGET VAR INF CAT SYS)
     get_filename_component(INF "${INF}" ABSOLUTE)
@@ -15,11 +18,8 @@ function(embed_driver TARGET VAR INF CAT SYS)
     embed_file("${TARGET}" "${CAT_VAR}" "${CAT}")
     embed_file("${TARGET}" "${SYS_VAR}" "${SYS}")
 
-    set(DIR "${CMAKE_BINARY_DIR}/EmbeddedDrivers")
-    file(MAKE_DIRECTORY "${DIR}")
-
-    set(SOURCE "${DIR}/${TAG}.c")
-    file(WRITE "${SOURCE}.new"
+    set(SOURCE "${CMAKE_BINARY_DIR}/EmbeddedDrivers/${TAG}.c")
+    write_file_if_changed("${SOURCE}"
         "#include <tuna/priv/windows/embedded_driver.h>\n"
 
         "extern tuna_embedded_file const ${INF_VAR};\n"
@@ -32,13 +32,5 @@ function(embed_driver TARGET VAR INF CAT SYS)
         "    &${SYS_VAR},\n"
         "};\n"
     )
-    execute_process(
-        ERROR_QUIET
-        COMMAND "${CMAKE_COMMAND}" -E compare_files "${SOURCE}.new" "${SOURCE}"
-        RESULT_VARIABLE CHANGED
-    )
-    if("${CHANGED}")
-        file(RENAME "${SOURCE}.new" "${SOURCE}")
-    endif()
     target_sources("${TARGET}" PRIVATE "${SOURCE}")
 endfunction()
