@@ -30,7 +30,7 @@ struct tuna_device {
 
 static
 tuna_error
-tuna_priv_translate_syserr(int err) {
+tuna_translate_syserr(int err) {
     switch (err) {
       case 0:;
         return 0;
@@ -49,7 +49,7 @@ tuna_priv_translate_syserr(int err) {
 
 static
 tuna_error
-tuna_priv_translate_nlerr(int err) {
+tuna_translate_nlerr(int err) {
     switch (err) {
       case 0:;
         return 0;
@@ -66,7 +66,7 @@ tuna_priv_translate_nlerr(int err) {
 
 static
 tuna_error
-tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
+tuna_disable_default_local_ip6_addr(tuna_device *dev) {
     struct nl_msg *nl_msg = NULL;
     
     int err = 0;
@@ -78,7 +78,7 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
 
     struct ifinfomsg ifi = {.ifi_index = dev->ifindex};
     if ((err = nlmsg_append(nl_msg, &ifi, sizeof(ifi), NLMSG_ALIGNTO))) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -97,7 +97,7 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
     if ((err = nla_put_u8(nl_msg, IFLA_INET6_ADDR_GEN_MODE,
                                   IN6_ADDR_GEN_MODE_NONE)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -106,12 +106,12 @@ tuna_priv_disable_default_local_ip6_addr(tuna_device *dev) {
     nla_nest_end(nl_msg, ifla_af_spec_nlattr);
 
     if ((err = nl_send_auto(dev->nl_sock, nl_msg)) < 0) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
     if ((err = nl_wait_for_ack(dev->nl_sock))) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -153,19 +153,19 @@ tuna_create_device(tuna_device **device) {
         }
         /* fallthrough */
       default:;
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
   open:;
     if ((dev->fd = open("/dev/net/tun", O_RDWR)) == -1) {
-        err = tuna_priv_translate_syserr(errno);
+        err = tuna_translate_syserr(errno);
         goto fail;
     }
 
     struct ifreq ifreq = {.ifr_flags = IFF_TUN | IFF_NO_PI};
     if (ioctl(dev->fd, TUNSETIFF, &ifreq) == -1) {
-        err = tuna_priv_translate_syserr(errno);
+        err = tuna_translate_syserr(errno);
         goto fail;
     }
 
@@ -178,12 +178,12 @@ tuna_create_device(tuna_device **device) {
         close(dev->fd);
         goto open;
       default:;
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
     dev->ifindex = rtnl_link_get_ifindex(rtnl_link);
 
-    if ((err = tuna_priv_disable_default_local_ip6_addr(dev))) { goto fail; }
+    if ((err = tuna_disable_default_local_ip6_addr(dev))) { goto fail; }
 
     *device = dev;
 
@@ -220,7 +220,7 @@ tuna_get_status(tuna_device const *dev, tuna_status *status) {
     if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     dev->ifindex, NULL, &rtnl_link)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -247,7 +247,7 @@ tuna_set_status(tuna_device *dev, tuna_status status) {
     if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     dev->ifindex, NULL, &rtnl_link)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -270,7 +270,7 @@ tuna_set_status(tuna_device *dev, tuna_status status) {
     if ((err = rtnl_link_change(dev->nl_sock,
                                 rtnl_link, rtnl_link_patch, 0)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -299,7 +299,7 @@ tuna_get_name(tuna_device const *device, char const **name) {
     if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     dev->ifindex, NULL, &rtnl_link)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -333,7 +333,7 @@ tuna_set_name(tuna_device *dev, char const *name) {
     if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     dev->ifindex, NULL, &rtnl_link)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -359,7 +359,7 @@ tuna_set_name(tuna_device *dev, char const *name) {
         err = TUNA_DEVICE_BUSY;
         goto fail;
       default:;
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -380,7 +380,7 @@ tuna_get_mtu(tuna_device const *dev, size_t *mtu) {
     if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     dev->ifindex, NULL, &rtnl_link)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -403,7 +403,7 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
     if ((err = rtnl_link_get_kernel(dev->nl_sock,
                                     dev->ifindex, NULL, &rtnl_link)))
     {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -430,7 +430,7 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
         }
         goto fail;
       default:;
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -444,7 +444,7 @@ tuna_set_mtu(tuna_device *dev, size_t mtu) {
 
 static
 int
-tuna_priv_addr_from_nl(tuna_address *addr, struct nl_addr *nl_addr) {
+tuna_addr_from_nl(tuna_address *addr, struct nl_addr *nl_addr) {
     switch (nl_addr_get_family(nl_addr)) {
       case AF_INET:;
         addr->family = TUNA_IP4;
@@ -472,7 +472,7 @@ tuna_get_addresses(tuna_device const *device,
     int err = 0;
 
     if ((err = rtnl_addr_alloc_cache(dev->nl_sock, &nl_cache))) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -496,7 +496,7 @@ tuna_get_addresses(tuna_device const *device,
         if (rtnl_addr_get_ifindex(rtnl_addr) != dev->ifindex) { continue; }
 
         struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
-        if (!tuna_priv_addr_from_nl(dev->addrs + cnt, nl_addr)) { continue; }
+        if (!tuna_addr_from_nl(dev->addrs + cnt, nl_addr)) { continue; }
 
         ++cnt;
     }
@@ -519,7 +519,7 @@ tuna_get_addresses(tuna_device const *device,
 
 static
 tuna_error
-tuna_priv_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
+tuna_addr_to_nl(tuna_address const *addr, struct nl_addr **nl_address) {
     struct nl_addr *nl_addr = NULL;
 
     int err = 0;
@@ -561,7 +561,7 @@ tuna_add_address(tuna_device *dev, tuna_address const *addr) {
 
     int err = 0;
 
-    if ((err = tuna_priv_addr_to_nl(addr, &nl_addr))) { goto fail; }
+    if ((err = tuna_addr_to_nl(addr, &nl_addr))) { goto fail; }
 
     if (!(rtnl_addr = rtnl_addr_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
@@ -570,12 +570,12 @@ tuna_add_address(tuna_device *dev, tuna_address const *addr) {
 
     rtnl_addr_set_ifindex(rtnl_addr, dev->ifindex);
     if ((err = rtnl_addr_set_local(rtnl_addr, nl_addr))) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
     if ((err = rtnl_addr_add(dev->nl_sock, rtnl_addr, NLM_F_REPLACE))) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -594,7 +594,7 @@ tuna_remove_address(tuna_device *dev, tuna_address const *addr) {
 
     int err = 0;
 
-    if ((err = tuna_priv_addr_to_nl(addr, &nl_addr))) { goto fail; }
+    if ((err = tuna_addr_to_nl(addr, &nl_addr))) { goto fail; }
 
     if (!(rtnl_addr = rtnl_addr_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
@@ -603,7 +603,7 @@ tuna_remove_address(tuna_device *dev, tuna_address const *addr) {
 
     rtnl_addr_set_ifindex(rtnl_addr, dev->ifindex);
     if ((err = rtnl_addr_set_local(rtnl_addr, nl_addr))) {
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
@@ -614,7 +614,7 @@ tuna_remove_address(tuna_device *dev, tuna_address const *addr) {
         err = 0;
         break;
       default:;
-        err = tuna_priv_translate_nlerr(-err);
+        err = tuna_translate_nlerr(-err);
         goto fail;
     }
 
