@@ -44,11 +44,11 @@ target_sources(tuna PRIVATE
     $<$<PLATFORM_ID:Windows>:src/windows/embedded_driver.c>
 )
 
-if(CMAKE_SYSTEM_NAME STREQUAL Linux)
+if("${CMAKE_SYSTEM_NAME}" STREQUAL Linux)
     find_package(libnl REQUIRED)
     target_link_libraries(tuna PRIVATE libnl::libnl)
 endif()
-if(CMAKE_SYSTEM_NAME STREQUAL Windows)
+if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
     embed_tap_windows(tuna)
 endif()
