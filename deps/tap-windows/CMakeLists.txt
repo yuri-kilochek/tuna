@@ -4,22 +4,25 @@ set(TUNA_TAP_WINDOWS_URL
     https://build.openvpn.net/downloads/releases/tap-windows-9.22.1.zip
     CACHE STRING "Where to get archive with compiled TAP-Windows driver from."
 )
+set(URL "${TUNA_TAP_WINDOWS_URL}")
+
 set(TUNA_TAP_WINDOWS_HASH
     SHA256=D15FB9A502375EBF46DE769E611BB477C41CFFEBA27789E9406183A81553249C
     CACHE STRING "Hash of the archive at TUNA_TAP_WINDOWS_URL."
 )
+set(HASH "${TUNA_TAP_WINDOWS_HASH}")
 
 string(SHA256 CACHE_TAG "${URL}\n${HASH}")
 if(NOT ("${_TUNA_TAP_WINDOWS_CACHE_TAG}" STREQUAL "${CACHE_TAG}"))
-    if("${TUNA_TAP_WINDOWS_HASH}")
-        set(EXPECTED_HASH_ARG EXPECTED_HASH "${TUNA_TAP_WINDOWS_HASH}")
+    if("${HASH}")
+        set(EXPECTED_HASH_ARG EXPECTED_HASH "${HASH}")
     else()
         set(EXPECTED_HASH_ARG)
     endif()
 
     set(ARCHIVE "${CMAKE_CURRENT_BINARY_DIR}/archive")
     message(STATUS "Downloading TAP-Windows driver...")
-    file(DOWNLOAD "${TUNA_TAP_WINDOWS_URL}" "${ARCHIVE}"
+    file(DOWNLOAD "${URL}" "${ARCHIVE}"
         SHOW_PROGRESS
         ${EXPECTED_HASH_ARG}
         STATUS STATUS
