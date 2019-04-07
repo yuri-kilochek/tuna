@@ -10,7 +10,7 @@ project(tuna VERSION ${PROJECT_VERSION})
 add_library(tuna)
 
 set_target_properties(tuna PROPERTIES VERSION ${PROJECT_VERSION})
-if(BUILD_SHARED_LIBS)
+if("${BUILD_SHARED_LIBS}")
     set_target_properties(tuna PROPERTIES C_VISIBILITY_PRESET hidden)
     target_compile_definitions(tuna PRIVATE TUNA_EXPORT INTERFACE TUNA_IMPORT)
 endif()
