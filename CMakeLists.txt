@@ -41,8 +41,9 @@ target_sources(tuna PRIVATE
     src/version.c
     src/error.c
     $<$<PLATFORM_ID:Linux>:src/linux.c>
-    $<$<PLATFORM_ID:Windows>:src/windows.c>
+    $<$<PLATFORM_ID:Windows>:src/windows/translate_err_code.c>
     $<$<PLATFORM_ID:Windows>:src/windows/embedded_driver.c>
+    $<$<PLATFORM_ID:Windows>:src/windows.c>
 )
 
 if("${CMAKE_SYSTEM_NAME}" STREQUAL Linux)
