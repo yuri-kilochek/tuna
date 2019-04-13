@@ -1,6 +1,7 @@
 #include <tuna/priv/windows/embedded_driver.h>
 
 #include <inttypes.h>
+#include <string.h>
 #include <stdio.h>
 
 #include <windows.h>
@@ -183,11 +184,17 @@ tuna_install_embedded_driver(tuna_embedded_driver const *embedded_driver) {
         goto out;
     }
 
-    char const hardware_id[] = "footun\0";
+    char hardware_id[MAX_PATH]; {
+        char const *sys_name = embedded_driver->sys->name;
+        size_t len = PathFindExtensionA(sys_name) - sys_name;
+        memcpy(hardware_id, sys_name, len);
+        memset(hardware_id + len, 0, 2);
+    }
+
     if (!SetupDiSetDeviceRegistryProperty(dev_info, &dev_info_data,
                                           SPDRP_HARDWAREID,
                                           (BYTE const *)&hardware_id,
-                                          sizeof(hardware_id)))
+                                          (DWORD)(strlen(hardware_id) + 2)))
     {
         err = tuna_translate_err_code(GetLastError());
         goto out;
@@ -208,7 +215,6 @@ tuna_install_embedded_driver(tuna_embedded_driver const *embedded_driver) {
                                             0,
                                             &need_reboot))
     {
-        printf("DRIVER UPDATE FAILED: %d\n", (int)GetLastError());
         err = tuna_translate_err_code(GetLastError());
         goto out;
     }
@@ -217,7 +223,15 @@ tuna_install_embedded_driver(tuna_embedded_driver const *embedded_driver) {
         goto out;
     }
 
-    // TODO: create with hwid specified in .inf file, then change it
+    char const new_hardware_id[] = "footun\0";
+    if (!SetupDiSetDeviceRegistryProperty(dev_info, &dev_info_data,
+                                          SPDRP_HARDWAREID,
+                                          (BYTE const *)&new_hardware_id,
+                                          sizeof(new_hardware_id)))
+    {
+        err = tuna_translate_err_code(GetLastError());
+        goto out;
+    }
 
   out:;
     if (err && registered) {
