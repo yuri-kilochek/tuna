@@ -1,4 +1,5 @@
 #include <tuna.h>
+#include <tuna/priv/windows/translate_err_code.h>
 #include <tuna/priv/windows/embedded_driver.h>
 
 #include <stdint.h>
@@ -15,84 +16,47 @@
 
 #pragma warning(disable: 4996) // No, MSVC, C functions are not deprecated.
 
+extern
+tuna_embedded_driver const tuna_tap_windows;
+
 struct tuna_device {
-    HANDLE hFile;
+    HANDLE handle;
 };
 
+tuna_error
+tuna_create_device(tuna_device **device) {
+    tuna_device *dev = NULL;
 
-//
-//tuna_error
-//tuna_create_device(tuna_device **ppDevice) {
-//    tuna_device *pDevice = NULL;
-//    //HKEY hkAdapter = 0;
-//
-//    //DWORD dwErrCode;
-//    tuna_error err = 0;
-//
-//    if (!(pDevice = malloc(sizeof(*pDevice)))) {
-//        err = TUNA_OUT_OF_MEMORY;
-//        goto fail;
-//    }
-//    *pDevice = (tuna_device){.hFile = INVALID_HANDLE_VALUE};
-//
-//    //if ((dwErrCode = RegOpenKeyExA(HKEY_LOCAL_MACHINE,
-//    //                               ADAPTER_KEY,
-//    //                               0,
-//    //                               KEY_READ,
-//    //                               &hkAdapter)))
-//    //{
-//    //    hkAdapter = 0;
-//    //    err = TunaPrivTranslateErrCode(dwErrCode);
-//    //    goto fail;
-//    //}
-//
-//    //char szSubkey[256];
-//    //strcpy(szSubkey, ADAPTER_KEY);
-//    //strcat(szSubkey, "\\");
-//    //DWORD dwSubkeyLen = (DWORD)strlen(szSubkey);
-//    //for (DWORD i = 0; ; ++i)
-//    //{
-//    //    dwErrCode = RegEnumKeyExA(hkAdapter,
-//    //                              i,
-//    //                              szSubkey + dwSubkeyLen,
-//    //                              &(DWORD){sizeof(szSubkey) - dwSubkeyLen},
-//    //                              NULL,
-//    //                              NULL,
-//    //                              NULL,
-//    //                              NULL);
-//    //    if (dwErrCode)
-//    //    {
-//    //        if (dwErrCode == ERROR_NO_MORE_ITEMS) break;
-//    //        err = TunaPrivTranslateErrCode(dwErrCode);
-//    //        goto fail;
-//    //    }
-//
-//
-//
-//    //}
-//
-//
-//
-//
-//
-//
-//    *ppDevice = pDevice;
-//
-//  done:;
-//    //if (hkAdapter) { RegCloseKey(hkAdapter); }
-//    return err;
-//  fail:;
-//    tuna_destroy_device(pDevice);
-//    goto done;
-//}
-//
-//void
-//tuna_destroy_device(tuna_device *pDevice)
-//{
-//    if (pDevice) {
-//        if (pDevice->hFile != INVALID_HANDLE_VALUE) {
-//            CloseHandle(pDevice->hFile);
-//        }
-//    }
-//    free(pDevice);
-//}
+    tuna_error err = 0;
+
+    if ((err = tuna_install_embedded_driver(&tuna_tap_windows))) { goto fail; }
+
+    if (!(dev = malloc(sizeof(*dev)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto fail;
+    }
+    *dev = (tuna_device){.handle = INVALID_HANDLE_VALUE};
+
+
+
+
+
+    *device = dev;
+
+  done:;
+    return err;
+  fail:;
+    tuna_destroy_device(dev);
+    goto done;
+}
+
+void
+tuna_destroy_device(tuna_device *dev)
+{
+    if (dev) {
+        if (dev->handle != INVALID_HANDLE_VALUE) {
+            CloseHandle(dev->handle);
+        }
+    }
+    free(dev);
+}

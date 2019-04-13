@@ -17,9 +17,9 @@ typedef struct {
 
 static
 tuna_error
-tuna_extrude_embedded_file(char *file_path,
-                           char const *dir_path,
-                           tuna_embedded_file const *embedded_file)
+tuna_extrude_file(char *file_path,
+                  char const *dir_path,
+                  tuna_embedded_file const *embedded_file)
 {
     HANDLE file_handle = INVALID_HANDLE_VALUE;
 
@@ -62,13 +62,13 @@ tuna_extrude_embedded_file(char *file_path,
 
 static
 tuna_error
-tuna_extrude_embedded_driver(tuna_extruded_driver *extruded_driver,
-                             tuna_embedded_driver const *embedded_driver)
+tuna_extrude_driver(tuna_extruded_driver *extruded_driver,
+                    tuna_embedded_driver const *embedded_driver)
 {
-    unsigned char dir_created = 0;
-    unsigned char inf_extruded = 0;
-    unsigned char cat_extruded = 0;
-    unsigned char sys_extruded = 0;
+    int dir_created = 0;
+    int inf_extruded = 0;
+    int cat_extruded = 0;
+    int sys_extruded = 0;
 
     tuna_error err = 0;
 
@@ -100,21 +100,21 @@ tuna_extrude_embedded_driver(tuna_extruded_driver *extruded_driver,
     }
     dir_created = 1;
 
-    if ((err = tuna_extrude_embedded_file(extruded_driver->inf,
-                                          extruded_driver->dir,
-                                          embedded_driver->inf)))
+    if ((err = tuna_extrude_file(extruded_driver->inf,
+                                 extruded_driver->dir,
+                                 embedded_driver->inf)))
     { goto fail; }
     inf_extruded = 1;
 
-    if ((err = tuna_extrude_embedded_file(extruded_driver->cat,
-                                          extruded_driver->dir,
-                                          embedded_driver->cat)))
+    if ((err = tuna_extrude_file(extruded_driver->cat,
+                                 extruded_driver->dir,
+                                 embedded_driver->cat)))
     { goto fail; }
     cat_extruded = 1;
 
-    if ((err = tuna_extrude_embedded_file(extruded_driver->sys,
-                                          extruded_driver->dir,
-                                          embedded_driver->sys)))
+    if ((err = tuna_extrude_file(extruded_driver->sys,
+                                 extruded_driver->dir,
+                                 embedded_driver->sys)))
     { goto fail; }
     sys_extruded = 1;
 
@@ -135,4 +135,27 @@ tuna_erase_extruded_driver(tuna_extruded_driver const *driver) {
     DeleteFileA(driver->cat);
     DeleteFileA(driver->inf);
     RemoveDirectoryA(driver->dir);
+}
+
+tuna_error
+tuna_install_embedded_driver(tuna_embedded_driver const *embedded_driver) {
+    int extruded = 0;
+    
+    tuna_error err = 0;
+    
+    tuna_extruded_driver extruded_driver;
+    if ((err = tuna_extrude_driver(&extruded_driver, embedded_driver))) {
+        goto fail;
+    }
+    extruded = 1;
+
+
+
+
+
+  done:;
+    if (extruded) { tuna_erase_extruded_driver(&extruded_driver); }
+    return err;
+  fail:;
+    goto done;
 }

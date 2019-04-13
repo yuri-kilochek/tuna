@@ -53,6 +53,8 @@ endif()
 if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
     embed_tap_windows(tuna)
+
+    target_link_libraries(tuna PRIVATE shlwapi)
 endif()
 
 target_include_directories(tuna PUBLIC

@@ -13,6 +13,10 @@ class ExampleConan(ConanFile):
     short_paths = True
     no_copy_source = True
 
+    def imports(self):
+        if self.settings.os == 'Windows':
+            self.copy("*.dll", str(self.settings.build_type), "bin")
+
     def build(self):
         cmake = CMake(self)
         cmake.configure(defs={
