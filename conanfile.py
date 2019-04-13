@@ -57,4 +57,4 @@ class TunaConan(ConanFile):
             self.cpp_info.defines.append('TUNA_IMPORT')
 
         if self.settings.os == 'Windows' and not self.options.shared:
-            self.cpp_info.libs.append('shlwapi')
+            self.cpp_info.libs.extend(['shlwapi', 'setupapi', 'newdev'])
