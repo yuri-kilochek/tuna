@@ -6,7 +6,7 @@ function(embed_file TARGET VAR FILE)
     get_filename_component(FILE "${FILE}" ABSOLUTE)
     get_filename_component(NAME "${FILE}" NAME)
 
-    string(MD5 TAG "${FILE}")
+    string(MD5 TAG "${VAR}")
     set(SOURCE "${CMAKE_BINARY_DIR}/EmbeddedFiles/${TAG}.c")
     set(SOURCE_GENERATOR "${SOURCE}.generator.cmake")
     write_file_if_changed("${SOURCE_GENERATOR}"

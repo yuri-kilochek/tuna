@@ -1,4 +1,4 @@
-include(Windows/EmbedDriver)
+include(Windows/EmbedDriverFiles)
 
 set(TUNA_TAP_WINDOWS_URL
     https://build.openvpn.net/downloads/releases/tap-windows-9.22.1.zip
@@ -12,10 +12,12 @@ set(TUNA_TAP_WINDOWS_HASH
 )
 set(HASH "${TUNA_TAP_WINDOWS_HASH}")
 
-file(READ "${CMAKE_CURRENT_LIST_FILE}" CACHE_TAG)
-string(SHA256 CACHE_TAG "${CACHE_TAG}")
+file(READ "${CMAKE_CURRENT_LIST_FILE}" THIS_CODE)
+
+set(CACHE_TAG "")
 string(SHA256 CACHE_TAG "${CACHE_TAG}${URL}")
 string(SHA256 CACHE_TAG "${CACHE_TAG}${HASH}")
+string(SHA256 CACHE_TAG "${CACHE_TAG}${THIS_CODE}")
 if(NOT ("${_TUNA_TAP_WINDOWS_CACHE_TAG}" STREQUAL "${CACHE_TAG}"))
     if("${HASH}")
         set(EXPECTED_HASH_ARG EXPECTED_HASH "${HASH}")
@@ -74,7 +76,7 @@ function(embed_tap_windows TARGET)
     target_include_directories("${TARGET}" PRIVATE
         "${_TUNA_TAP_WINDOWS_INCLUDE_DIR}"
     )
-    embed_driver("${TARGET}" tuna_tap_windows
+    embed_driver_files("${TARGET}" tuna_embedded_tap_windows_files
         "${_TUNA_TAP_WINDOWS_INF}"
         "${_TUNA_TAP_WINDOWS_CAT}"
         "${_TUNA_TAP_WINDOWS_SYS}"
