@@ -19,7 +19,7 @@ endif()
 set(HEADER_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in")
 set(HEADER "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h")
 set(HEADER_GENERATOR "${CMAKE_CURRENT_BINARY_DIR}/tuna.h.generator.cmake")
-write_file_if_changed("${HEADER_GENERATOR}"
+_tuna_write_file_if_changed("${HEADER_GENERATOR}"
     "set(MAJOR_VERSION ${PROJECT_VERSION_MAJOR})\n"
     "set(MINOR_VERSION ${PROJECT_VERSION_MINOR})\n"
     "set(PATCH_VERSION ${PROJECT_VERSION_PATCH})\n"
@@ -50,8 +50,8 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL Linux)
 endif()
 if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
-    embed_tap_windows(tuna)
-    target_link_libraries(tuna PRIVATE shlwapi setupapi newdev)
+    _tuna_embed_tap_windows(tuna)
+    target_link_libraries(tuna PRIVATE pathcch setupapi newdev)
 endif()
 
 target_include_directories(tuna PUBLIC

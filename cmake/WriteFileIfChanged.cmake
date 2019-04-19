@@ -1,6 +1,6 @@
 include_guard(GLOBAL)
 
-function(write_file_if_changed FILE)
+function(_tuna_write_file_if_changed FILE)
     string(MD5 TMP_FILE "${FILE};${ARGN}")
     set(TMP_FILE "${CMAKE_CURRENT_BINARY_DIR}/${TMP_FILE}")
 

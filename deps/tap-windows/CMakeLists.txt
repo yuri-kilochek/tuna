@@ -1,4 +1,4 @@
-include(Windows/EmbedDriverFiles)
+include(Windows/EmbedDriver)
 
 set(TUNA_TAP_WINDOWS_URL
     https://build.openvpn.net/downloads/releases/tap-windows-9.22.1.zip
@@ -69,16 +69,34 @@ if(NOT ("${_TUNA_TAP_WINDOWS_CACHE_TAG}" STREQUAL "${CACHE_TAG}"))
     set(_TUNA_TAP_WINDOWS_CAT "${CAT}" CACHE INTERNAL "" FORCE)
     set(_TUNA_TAP_WINDOWS_SYS "${SYS}" CACHE INTERNAL "" FORCE)
 
+    set(HARDWARE_ID)
+    foreach(ENCODING IN ITEMS "UTF-16LE" "UTF-8")
+        file(STRINGS "${INF}" INF_CONTENT ENCODING "${ENCODING}")
+        list(JOIN INF_CONTENT "\n" INF_CONTENT)
+        if("${INF_CONTENT}" MATCHES "\n\\[([^\n]+)\.driver]\n")
+            set(HARDWARE_ID "${CMAKE_MATCH_1}")
+            break()
+        endif()
+    endforeach()
+    if("${HARDWARE_ID}" STREQUAL "")
+        message(FATAL_ERROR "Can't extract hardware id from TAP-Windows'"
+                            " .inf file")
+    endif()
+    set(_TUNA_TAP_WINDOWS_HARDWARE_ID "${HARDWARE_ID}" CACHE INTERNAL "" FORCE)
+
     set(_TUNA_TAP_WINDOWS_CACHE_TAG "${CACHE_TAG}" CACHE INTERNAL "")
 endif()
 
-function(embed_tap_windows TARGET)
+function(_tuna_embed_tap_windows TARGET)
     target_include_directories("${TARGET}" PRIVATE
         "${_TUNA_TAP_WINDOWS_INCLUDE_DIR}"
     )
-    embed_driver_files("${TARGET}" tuna_embedded_tap_windows_files
+    _tuna_embed_driver("${TARGET}" tuna_embedded_tap_windows
         "${_TUNA_TAP_WINDOWS_INF}"
         "${_TUNA_TAP_WINDOWS_CAT}"
         "${_TUNA_TAP_WINDOWS_SYS}"
+    )
+    target_compile_definitions("${TARGET}" PRIVATE
+        "TUNA_TAP_WINDOWS_HARDWARE_ID=L\"${_TUNA_TAP_WINDOWS_HARDWARE_ID}\""
     )
 endfunction()

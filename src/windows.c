@@ -13,7 +13,7 @@
 
 #include <tap-windows.h>
 
-#include <tuna/priv/windows/embedded_driver_files.h>
+#include <tuna/priv/windows/embedded_driver.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -39,46 +39,6 @@ tuna_translate_hresult(HRESULT hres) {
       default:;
         return TUNA_UNEXPECTED;
     }
-}
-
-static
-tuna_error
-tuna_utf8to16(wchar_t **utf16_out, char const *utf8) {
-    wchar_t *utf16 = NULL;
-
-    tuna_error err = 0;
-
-    int utf16_size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
-                                         utf8, -1,
-                                         NULL, 0);
-    if (utf16_size == 0) {
-        err = tuna_translate_error(GetLastError());
-        goto out;
-    }
-
-    if (!(utf16 = malloc(utf16_size * sizeof(*utf16)))) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-
-    int new_utf16_size = MultiByteToWideChar(CP_UTF8, MB_ERR_INVALID_CHARS,
-                                             utf8, -1,
-                                             utf16, utf16_size);
-    if (new_utf16_size == 0) {
-        err = tuna_translate_error(GetLastError());
-        goto out;
-    }
-    if (new_utf16_size != utf16_size) {
-        err = TUNA_UNEXPECTED;
-        goto out;
-    }
-
-    *utf16_out = utf16;
-    
-  out:;
-    if (err) { free(utf16); }
-
-    return err;
 }
 
 static
@@ -127,14 +87,12 @@ tuna_extrude_file(wchar_t **path_out,
                   wchar_t const *dir,
                   tuna_embedded_file const *file)
 {
-    wchar_t *name = NULL;
     wchar_t *path = NULL;
     HANDLE handle = INVALID_HANDLE_VALUE;
 
     tuna_error err = 0;
 
-    if ((err = tuna_utf8to16(&name, file->name))) { goto out; }
-    if ((err = tuna_join_paths(&path, dir, name))) { goto out; }
+    if ((err = tuna_join_paths(&path, dir, file->name))) { goto out; }
     handle = CreateFileW(path,
                          GENERIC_WRITE,
                          0,
@@ -161,35 +119,34 @@ tuna_extrude_file(wchar_t **path_out,
   out:;
     if (handle != INVALID_HANDLE_VALUE) { CloseHandle(handle); }
     if (err) { tuna_erase_extruded_file(path); }
-    free(name);
 
     return err;
 }
 
 typedef struct {
     wchar_t *dir;
-    wchar_t *inf;
-    wchar_t *cat;
-    wchar_t *sys;
-} tuna_extruded_driver_files;
+    wchar_t *inf_path;
+    wchar_t *cat_path;
+    wchar_t *sys_path;
+} tuna_extruded_driver;
 
 static
 void
-tuna_erase_extruded_driver_files(tuna_extruded_driver_files const *files) {
-    tuna_erase_extruded_file(files->sys);
-    tuna_erase_extruded_file(files->cat);
-    tuna_erase_extruded_file(files->inf);
+tuna_erase_extruded_driver(tuna_extruded_driver const *driver) {
+    tuna_erase_extruded_file(driver->sys_path);
+    tuna_erase_extruded_file(driver->cat_path);
+    tuna_erase_extruded_file(driver->inf_path);
 
-    if (files->dir) { RemoveDirectoryW(files->dir); }
-    free(files->dir);
+    if (driver->dir) { RemoveDirectoryW(driver->dir); }
+    free(driver->dir);
 }
 
 static
 tuna_error
-tuna_extrude_driver_files(tuna_extruded_driver_files *extruded_out,
-                          tuna_embedded_driver_files const *embedded)
+tuna_extrude_driver(tuna_extruded_driver *extruded_out,
+                    tuna_embedded_driver const *embedded)
 {
-    tuna_extruded_driver_files extruded = {0};
+    tuna_extruded_driver extruded = {0};
 
     tuna_error err = 0;
 
@@ -200,7 +157,7 @@ tuna_extrude_driver_files(tuna_extruded_driver_files *extruded_out,
     }
     wchar_t dir_name[/*max path component length:*/256];
     if (swprintf(dir_name, sizeof(dir_name) / sizeof(*dir_name),
-                 L"TunaDriverFiles-%u", (unsigned)GetCurrentThreadId()) < 0)
+                 L"TunaDriver-%lu", (unsigned long)GetCurrentThreadId()) < 0)
     {
         err = TUNA_UNEXPECTED;
         goto out;
@@ -216,131 +173,134 @@ tuna_extrude_driver_files(tuna_extruded_driver_files *extruded_out,
         }
     }
 
-    if ((err = tuna_extrude_file(&extruded.inf,
+    if ((err = tuna_extrude_file(&extruded.inf_path,
                                  extruded.dir,
-                                 embedded->inf))) { goto out; }
-    if ((err = tuna_extrude_file(&extruded.cat,
+                                 embedded->inf_file))) { goto out; }
+    if ((err = tuna_extrude_file(&extruded.cat_path,
                                  extruded.dir,
-                                 embedded->cat))) { goto out; }
-    if ((err = tuna_extrude_file(&extruded.sys,
+                                 embedded->cat_file))) { goto out; }
+    if ((err = tuna_extrude_file(&extruded.sys_path,
                                  extruded.dir,
-                                 embedded->sys))) { goto out; }
+                                 embedded->sys_file))) { goto out; }
 
     *extruded_out = extruded;
 
   out:;
-    if (err) { tuna_erase_extruded_driver_files(&extruded); }
+    if (err) { tuna_erase_extruded_driver(&extruded); }
 
     return err;
 }
 
-//static
-//tuna_error
-//tuna_install_embedded_driver(tuna_embedded_driver_files const *embedded_driver_files) {
-//    int extruded = 0;
-//    HDEVINFO dev_info = INVALID_HANDLE_VALUE;
-//    int registered = 0;
-//    
-//    tuna_error err = 0;
-//    
-//    tuna_extruded_driver extruded_driver;
-//    if ((err = tuna_extrude_driver(&extruded_driver, embedded_driver_files))) {
-//        goto out;
-//    }
-//    extruded = 1;
-//
-//    GUID class_guid;
-//    char class_name[MAX_CLASS_NAME_LEN];
-//    if (!SetupDiGetINFClassA(extruded_driver.inf,
-//                             &class_guid,
-//                             class_name,
-//                             sizeof(class_name),
-//                             NULL))
-//    {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//
-//    dev_info = SetupDiCreateDeviceInfoList(&class_guid, NULL);
-//    if (dev_info == INVALID_HANDLE_VALUE) {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//
-//    SP_DEVINFO_DATA dev_info_data = {.cbSize = sizeof(dev_info_data)};
-//    if (!SetupDiCreateDeviceInfoA(dev_info,
-//                                  class_name, &class_guid,
-//                                  NULL,
-//                                  NULL,
-//                                  DICD_GENERATE_ID,
-//                                  &dev_info_data))
-//    {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//
-//    char hardware_id[MAX_PATH]; {
-//        char const *sys_name = embedded_driver_files->sys->name;
-//        size_t len = PathFindExtensionA(sys_name) - sys_name;
-//        memcpy(hardware_id, sys_name, len);
-//        memset(hardware_id + len, 0, 2);
-//    }
-//
-//    if (!SetupDiSetDeviceRegistryProperty(dev_info, &dev_info_data,
-//                                          SPDRP_HARDWAREID,
-//                                          (BYTE const *)&hardware_id,
-//                                          (DWORD)(strlen(hardware_id) + 2)))
-//    {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//
-//    if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE,
-//                                   dev_info, &dev_info_data))
-//    {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//    registered = 1;
-//
-//    BOOL need_reboot;
-//    if (!UpdateDriverForPlugAndPlayDevicesA(NULL,
-//                                            hardware_id,
-//                                            extruded_driver.inf,
-//                                            0,
-//                                            &need_reboot))
-//    {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//    if (need_reboot) {
-//        err = TUNA_UNEXPECTED;
-//        goto out;
-//    }
-//
-//    char const new_hardware_id[] = "footun\0";
-//    if (!SetupDiSetDeviceRegistryProperty(dev_info, &dev_info_data,
-//                                          SPDRP_HARDWAREID,
-//                                          (BYTE const *)&new_hardware_id,
-//                                          sizeof(new_hardware_id)))
-//    {
-//        err = tuna_translate_err_code(GetLastError());
-//        goto out;
-//    }
-//
-//  out:;
-//    if (err && registered) {
-//        SetupDiCallClassInstaller(DIF_REMOVE, dev_info, &dev_info_data);
-//    }
-//    if (dev_info != INVALID_HANDLE_VALUE) {
-//        SetupDiDestroyDeviceInfoList(dev_info);
-//    }
-//    if (extruded) { tuna_erase_extruded_driver(&extruded_driver); }
-//    return err;
-//}
+static
+tuna_error
+tuna_install_driver(tuna_embedded_driver const *embedded,
+                    wchar_t const *hardware_id)
+{
+    tuna_extruded_driver extruded = {0};
+    HDEVINFO dev_info = INVALID_HANDLE_VALUE;
+    wchar_t *hardware_ids = NULL;
+    _Bool registered = 0;
+    
+    tuna_error err = 0;
+    
+    if ((err = tuna_extrude_driver(&extruded, embedded))) { goto out; }
 
-extern
-tuna_embedded_driver_files const tuna_embedded_tap_windows_files;
+    GUID class_guid;
+    wchar_t class_name[MAX_CLASS_NAME_LEN];
+    if (!SetupDiGetINFClassW(extruded.inf_path,
+                             &class_guid,
+                             class_name,
+                             sizeof(class_name) / sizeof(*class_name),
+                             NULL))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+
+    dev_info = SetupDiCreateDeviceInfoList(&class_guid, NULL);
+    if (dev_info == INVALID_HANDLE_VALUE) {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+
+    SP_DEVINFO_DATA dev_info_data = {.cbSize = sizeof(dev_info_data)};
+    if (!SetupDiCreateDeviceInfoW(dev_info,
+                                  class_name, &class_guid,
+                                  NULL,
+                                  NULL,
+                                  DICD_GENERATE_ID,
+                                  &dev_info_data))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+
+    size_t hardware_id_len = wcslen(hardware_id);
+    size_t hardware_ids_byte_size =
+        (hardware_id_len + 1 + 1) * sizeof(*hardware_ids);
+    if (!(hardware_ids = malloc(hardware_ids_byte_size))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+    wcscpy(hardware_ids, hardware_id);
+    hardware_ids[hardware_id_len + 1] = L'\0';
+
+    if (!SetupDiSetDeviceRegistryPropertyW(dev_info, &dev_info_data,
+                                           SPDRP_HARDWAREID,
+                                           (BYTE const *)&hardware_ids,
+                                           (DWORD)hardware_ids_byte_size))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+
+    if (!SetupDiCallClassInstaller(DIF_REGISTERDEVICE,
+                                   dev_info, &dev_info_data))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+    registered = 1;
+
+    BOOL need_reboot;
+    if (!UpdateDriverForPlugAndPlayDevicesW(NULL,
+                                            hardware_id,
+                                            extruded.inf_path,
+                                            0,
+                                            &need_reboot))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+    if (need_reboot) {
+        err = TUNA_UNEXPECTED;
+        goto out;
+    }
+
+    wchar_t const new_hardware_id[] = L"footun\0";
+    if (!SetupDiSetDeviceRegistryPropertyW(dev_info, &dev_info_data,
+                                           SPDRP_HARDWAREID,
+                                           (BYTE const *)&new_hardware_id,
+                                           sizeof(new_hardware_id)))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+
+  out:;
+    if (err && registered) {
+        SetupDiCallClassInstaller(DIF_REMOVE, dev_info, &dev_info_data);
+    }
+    free(hardware_ids);
+    if (dev_info != INVALID_HANDLE_VALUE) {
+        SetupDiDestroyDeviceInfoList(dev_info);
+    }
+    tuna_erase_extruded_driver(&extruded);
+
+    return err;
+}
+
+extern tuna_embedded_driver const tuna_embedded_tap_windows;
 
 struct tuna_device {
     HANDLE handle;
@@ -352,7 +312,9 @@ tuna_create_device(tuna_device **device) {
 
     tuna_error err = 0;
 
-    //if ((err = tuna_install_embedded_driver(&tuna_embedded_tap_windows_files))) { goto fail; }
+    if ((err = tuna_install_driver(&tuna_embedded_tap_windows,
+                                   TUNA_TAP_WINDOWS_HARDWARE_ID)))
+    { goto fail; }
 
     if (!(dev = malloc(sizeof(*dev)))) {
         err = TUNA_OUT_OF_MEMORY;
