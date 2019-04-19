@@ -3,6 +3,7 @@
 #include <wchar.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <assert.h>
 
 #include <windows.h>
 #include <shlwapi.h>
@@ -198,7 +199,6 @@ tuna_install_driver(tuna_embedded_driver const *embedded,
 {
     tuna_extruded_driver extruded = {0};
     HDEVINFO dev_info = INVALID_HANDLE_VALUE;
-    wchar_t *hardware_ids = NULL;
     _Bool registered = 0;
     
     tuna_error err = 0;
@@ -235,20 +235,16 @@ tuna_install_driver(tuna_embedded_driver const *embedded,
         goto out;
     }
 
-    size_t hardware_id_len = wcslen(hardware_id);
-    size_t hardware_ids_byte_size =
-        (hardware_id_len + 1 + 1) * sizeof(*hardware_ids);
-    if (!(hardware_ids = malloc(hardware_ids_byte_size))) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
+    assert(wcslen(hardware_id) <= MAX_DEVICE_ID_LEN);
+    wchar_t hardware_ids[MAX_DEVICE_ID_LEN + 1 + 1];
     wcscpy(hardware_ids, hardware_id);
-    hardware_ids[hardware_id_len + 1] = L'\0';
+    hardware_ids[wcslen(hardware_ids) + 1] = L'\0';
+
 
     if (!SetupDiSetDeviceRegistryPropertyW(dev_info, &dev_info_data,
                                            SPDRP_HARDWAREID,
-                                           (BYTE const *)&hardware_ids,
-                                           (DWORD)hardware_ids_byte_size))
+                                           (BYTE *)&hardware_ids,
+                                           (DWORD)sizeof(hardware_ids)))
     {
         err = tuna_translate_error(GetLastError());
         goto out;
@@ -272,16 +268,13 @@ tuna_install_driver(tuna_embedded_driver const *embedded,
         err = tuna_translate_error(GetLastError());
         goto out;
     }
-    if (need_reboot) {
-        err = TUNA_UNEXPECTED;
-        goto out;
-    }
+    assert(!need_reboot);
 
-    wchar_t const new_hardware_id[] = L"footun\0";
+    wchar_t new_hwids[MAX_DEVICE_ID_LEN + 1 + 1] = L"footun\0";
     if (!SetupDiSetDeviceRegistryPropertyW(dev_info, &dev_info_data,
                                            SPDRP_HARDWAREID,
-                                           (BYTE const *)&new_hardware_id,
-                                           sizeof(new_hardware_id)))
+                                           (BYTE *)&new_hwids,
+                                           (DWORD)sizeof(new_hwids)))
     {
         err = tuna_translate_error(GetLastError());
         goto out;
@@ -291,7 +284,6 @@ tuna_install_driver(tuna_embedded_driver const *embedded,
     if (err && registered) {
         SetupDiCallClassInstaller(DIF_REMOVE, dev_info, &dev_info_data);
     }
-    free(hardware_ids);
     if (dev_info != INVALID_HANDLE_VALUE) {
         SetupDiDestroyDeviceInfoList(dev_info);
     }
