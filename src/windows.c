@@ -26,6 +26,14 @@ tuna_translate_error(DWORD err_code) {
     switch (err_code) {
       case 0:;
         return 0;
+      case ERROR_ACCESS_DENIED:;
+      case ERROR_AUTHENTICODE_PUBLISHER_NOT_TRUSTED:;
+        return TUNA_FORBIDDEN;
+      case ERROR_NOT_ENOUGH_MEMORY:;
+      case ERROR_OUTOFMEMORY:;
+        return TUNA_OUT_OF_MEMORY;
+      case ERROR_TOO_MANY_OPEN_FILES:;
+        return TUNA_TOO_MANY_HANDLES;
       default:;
         return TUNA_UNEXPECTED;
     }
@@ -34,11 +42,16 @@ tuna_translate_error(DWORD err_code) {
 static
 tuna_error
 tuna_translate_hresult(HRESULT hres) {
-    switch (hres) {
-      case 0:;
-        return 0;
-      default:;
-        return TUNA_UNEXPECTED;
+    switch (HRESULT_FACILITY(hres)) {
+      case FACILITY_WIN32:
+        return tuna_translate_error(HRESULT_CODE(hres));
+      default:
+        switch (hres) {
+          case 0:;
+            return 0;
+          default:;
+            return TUNA_UNEXPECTED;
+        }
     }
 }
 
@@ -240,7 +253,6 @@ tuna_install_driver(tuna_embedded_driver const *embedded,
     wcscpy(hardware_ids, hardware_id);
     hardware_ids[wcslen(hardware_ids) + 1] = L'\0';
 
-
     if (!SetupDiSetDeviceRegistryPropertyW(dev_info, &dev_info_data,
                                            SPDRP_HARDWAREID,
                                            (BYTE *)&hardware_ids,
@@ -269,16 +281,6 @@ tuna_install_driver(tuna_embedded_driver const *embedded,
         goto out;
     }
     assert(!need_reboot);
-
-    wchar_t new_hwids[MAX_DEVICE_ID_LEN + 1 + 1] = L"footun\0";
-    if (!SetupDiSetDeviceRegistryPropertyW(dev_info, &dev_info_data,
-                                           SPDRP_HARDWAREID,
-                                           (BYTE *)&new_hwids,
-                                           (DWORD)sizeof(new_hwids)))
-    {
-        err = tuna_translate_error(GetLastError());
-        goto out;
-    }
 
   out:;
     if (err && registered) {
