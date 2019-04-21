@@ -101,7 +101,7 @@ tuna_unextrude_file(HANDLE handle) {
 
 static
 int
-tuna_extrude_file(HANDLE *handle_out,
+tuna_extrude_file(wchar_t **path_out, HANDLE *handle_out,
                   wchar_t const *dir,
                   tuna_embedded_file const *embedded)
 {
@@ -139,11 +139,12 @@ tuna_extrude_file(HANDLE *handle_out,
         goto out;
     }
 
+    if (path_out) { *path_out = path; }
     *handle_out = handle;
 
   out:;
     if (err) { tuna_unextrude_file(handle); }
-    free(path);
+    if (err || !path_out) { free(path); }
 
     return err;
 }
@@ -159,6 +160,7 @@ tuna_get_extrusion_dir(wchar_t **dir_out) {
 }
 
 typedef struct {
+    wchar_t *inf_path;
     HANDLE inf_handle;
     HANDLE cat_handle;
     HANDLE sys_handle;
@@ -180,6 +182,7 @@ tuna_unextrude_driver(tuna_extruded_driver const *extruded) {
     tuna_unextrude_file(extruded->sys_handle);
     tuna_unextrude_file(extruded->cat_handle);
     tuna_unextrude_file(extruded->inf_handle);
+    free(extruded->inf_path);
 
     if (tuna_get_extrusion_dir(&dir)) { goto out; }
 
@@ -260,7 +263,7 @@ tuna_extrude_driver(tuna_extruded_driver *extruded_out,
         }
     }
 
-    switch ((err = tuna_extrude_file(&extruded.inf_handle,
+    switch ((err = tuna_extrude_file(&extruded.inf_path, &extruded.inf_handle,
                                      subdir, embedded->inf_file)))
     {
       case TUNA_NO_ANCESTOR_DIR:;
@@ -270,9 +273,9 @@ tuna_extrude_driver(tuna_extruded_driver *extruded_out,
       default:;
         goto out;
     }
-    if ((err = tuna_extrude_file(&extruded.cat_handle,
+    if ((err = tuna_extrude_file(NULL, &extruded.cat_handle,
                                  subdir, embedded->cat_file))) { goto out; }
-    if ((err = tuna_extrude_file(&extruded.sys_handle,
+    if ((err = tuna_extrude_file(NULL, &extruded.sys_handle,
                                  subdir, embedded->sys_file))) { goto out; }
 
     *extruded_out = extruded;
