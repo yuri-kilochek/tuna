@@ -48,9 +48,9 @@ static
 int
 tuna_translate_hresult(HRESULT hres) {
     switch (HRESULT_FACILITY(hres)) {
-      case FACILITY_WIN32:
+      case FACILITY_WIN32:;
         return tuna_translate_error(HRESULT_CODE(hres));
-      default:
+      default:;
         switch (hres) {
           case 0:;
             return 0;
@@ -95,7 +95,8 @@ tuna_join_paths(wchar_t **joined_out,
 
 static
 void
-tuna_unextrude_file(HANDLE handle) {
+tuna_unextrude_file(wchar_t *path, HANDLE handle) {
+    free(path);
     if (handle != INVALID_HANDLE_VALUE) { CloseHandle(handle); }
 }
 
@@ -143,8 +144,11 @@ tuna_extrude_file(wchar_t **path_out, HANDLE *handle_out,
     *handle_out = handle;
 
   out:;
-    if (err) { tuna_unextrude_file(handle); }
-    if (err || !path_out) { free(path); }
+    if (err) {
+        tuna_unextrude_file(path, handle);
+    } else if (!path_out) {
+        free(path);
+    }
 
     return err;
 }
@@ -179,10 +183,9 @@ tuna_unextrude_driver(tuna_extruded_driver const *extruded) {
     wchar_t *subdir = NULL;
     HANDLE handle = INVALID_HANDLE_VALUE;
 
-    tuna_unextrude_file(extruded->sys_handle);
-    tuna_unextrude_file(extruded->cat_handle);
-    tuna_unextrude_file(extruded->inf_handle);
-    free(extruded->inf_path);
+    tuna_unextrude_file(extruded->inf_path, extruded->sys_handle);
+    tuna_unextrude_file(NULL, extruded->cat_handle);
+    tuna_unextrude_file(NULL, extruded->inf_handle);
 
     if (tuna_get_extrusion_dir(&dir)) { goto out; }
 
@@ -249,7 +252,7 @@ tuna_extrude_driver(tuna_extruded_driver *extruded_out,
         }
     }
 
-  create_subdir:
+  create_subdir:;
     if (!CreateDirectoryW(subdir, NULL)) {
         DWORD err_code = GetLastError();
         switch (err_code) {
