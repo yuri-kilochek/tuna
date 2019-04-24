@@ -21,6 +21,7 @@
 
 #pragma warning(disable: 4996) // No, MSVC, C functions are not deprecated.
 
+#define TUNA_NO_SUCH_PROPERTY (-2)
 #define TUNA_NO_ANCESTOR_DIR (-1)
 
 static
@@ -289,60 +290,211 @@ tuna_extrude_driver(tuna_extruded_driver *extruded_out,
     return err;
 }
 
-//static
-//tuna_error
-//tuna_get_device_text_property(wchar_t **value_out,
-//                              HDEVINFO dev_info,
-//                              SP_DEVINFO_DATA *dev_info_data,
-//                              DWORD key)
-//{
-//    wchar_t *value = NULL;
-//
-//    tuna_error err = 0;
-//
-//    DWORD type;
-//    DWORD size;
-//    if (!SetupDiGetDeviceRegistryPropertyW(dev_info, dev_info_data,
-//                                           key, &type,
-//                                           NULL, 0, &size))
-//    {
-//        DWORD err_code = GetLastError();
-//        if (err_code == ERROR_INVALID_DATA) { goto done; }
-//        err = tuna_translate_error(err_code);
-//        goto out;
-//    }
-//    switch (type) {
-//      case REG_SZ:;
-//      case REG_MULTI_SZ:;
-//        break;
-//      default:;
-//        err = TUNA_UNEXPECTED;
-//        goto out;
-//    }
-//
-//    if (!(value = malloc(size))) {
-//        err = TUNA_OUT_OF_MEMORY;
-//        goto out;
-//    }
-//
-//    if (!SetupDiGetDeviceRegistryPropertyW(dev_info, dev_info_data,
-//                                           key, NULL,
-//                                           (void *)value, size, NULL))
-//    {
-//        err = tuna_translate_error(GetLastError());
-//        goto out;
-//    }
-//
-//  done:;
-//    *value_out = value;
-//
-//  out:;
-//    if (err) { free(value); }
-//
-//    return err;
-//}
-//
-//
+static
+void
+tuna_free_string_list(wchar_t **list) {
+    if (list) {
+        for (wchar_t **str = list; *str; ++str) { free(*str); }
+        free(list); 
+    }
+}
+
+static
+int
+tuna_parse_reg_multi_sz(wchar_t ***list_out, wchar_t const *multi_sz) {
+    wchar_t **list = NULL;
+
+    int err = 0;
+
+    size_t count = 0;
+    for (wchar_t const *sz = multi_sz; *sz; sz += wcslen(sz) + 1) { ++count; }
+
+    if (!(list = malloc((count + 1) * sizeof(*list)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    wchar_t const *sz = multi_sz;
+    for (size_t i = 0; i < count; ++i) {
+        size_t len = wcslen(sz);
+
+        if (!(list[i] = malloc((len + 1) * sizeof(**list)))) {
+            err = TUNA_OUT_OF_MEMORY;
+            goto out;
+        }
+        wcscpy(list[i], sz);
+
+        sz += len + 1;
+    }
+    list[count] = NULL;
+
+    *list_out = list;
+
+  out:;
+    if (err) { tuna_free_string_list(list); }
+
+    return err;
+}
+
+static
+int
+tuna_render_reg_multi_sz(wchar_t **multi_sz_out,
+                         wchar_t const *const *list)
+{
+    wchar_t *multi_sz = NULL;
+
+    int err = 0;
+
+    size_t len = 0;
+    for (wchar_t const *const *str = list; *str; ++str) {
+        len += wcslen(*str) + 1;
+    }
+
+    if (!(multi_sz = malloc((len + 1) * sizeof(*multi_sz)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    wchar_t *sz = multi_sz;
+    for (wchar_t const *const *str = list; *str; ++str) {
+        size_t len = wcslen(*str);
+        if (len == 0) { continue; }
+        wcscpy(sz, *str);
+        sz += len + 1;
+    }
+    multi_sz[len] = L'\0';
+
+    *multi_sz_out = multi_sz;
+
+  out:;
+    if (err) { free(multi_sz); }
+
+    return err;
+}
+
+static
+int
+tuna_get_device_string_list_property(wchar_t ***list_out,
+                                     HDEVINFO dev_info,
+                                     SP_DEVINFO_DATA *dev_info_data,
+                                     DWORD property)
+{
+    wchar_t *multi_sz = NULL;
+    wchar_t **list = NULL;
+
+    int err = 0;
+
+    DWORD size;
+    if (!SetupDiGetDeviceRegistryPropertyW(dev_info, dev_info_data,
+                                           property, NULL,
+                                           NULL, 0, &size))
+    {
+        DWORD err_code = GetLastError();
+        if (err_code == ERROR_INVALID_DATA) {
+            err = TUNA_NO_SUCH_PROPERTY;
+        } else {
+            err = tuna_translate_error(err_code);
+        }
+        goto out;
+    }
+    size_t len = (size + sizeof(*multi_sz) - 1) / sizeof(*multi_sz) + 1;
+    
+    if (!(multi_sz = malloc((len + 1) * sizeof(*multi_sz)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    if (!SetupDiGetDeviceRegistryPropertyW(dev_info, dev_info_data,
+                                           property, NULL,
+                                           (void *)multi_sz, size, NULL))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+    multi_sz[len - 1] = multi_sz[len] = L'\0';
+
+    if ((err = tuna_parse_reg_multi_sz(&list, multi_sz))) { goto out; }
+
+    *list_out = list;
+
+  out:;
+    if (err) { tuna_free_string_list(list); }
+    free(multi_sz);
+
+    return err;
+}
+
+static
+int
+tuna_set_device_string_list_property(HDEVINFO dev_info,
+                                     SP_DEVINFO_DATA *dev_info_data,
+                                     DWORD property,
+                                     wchar_t const *const *list)
+{
+    wchar_t *multi_sz = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_render_reg_multi_sz(&multi_sz, list))) { goto out; }
+
+    size_t len = 0;
+    while (multi_sz[len]) { len += wcslen(multi_sz + len) + 1; }
+    size_t size = (len + 1) * sizeof(*multi_sz);
+
+    if (!SetupDiSetDeviceRegistryPropertyW(dev_info, dev_info_data, property,
+                                           (void *)multi_sz, (DWORD)size))
+    {
+        err = tuna_translate_error(GetLastError());
+        goto out;
+    }
+
+  out:;
+    free(multi_sz);
+
+    return err;
+}
+
+static
+int
+tuna_replace_device_hardware_id(HDEVINFO dev_info,
+                                SP_DEVINFO_DATA *dev_info_data,
+                                wchar_t const *cur_hwid,
+                                wchar_t const *new_hwid)
+{
+    wchar_t **hwids = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_get_device_string_list_property(&hwids,
+                                                    dev_info, dev_info_data,
+                                                    SPDRP_HARDWAREID)))
+    { goto out; }
+
+    for (wchar_t **hwid = hwids; *hwid; ++hwid) {
+        if (wcscmp(*hwid, cur_hwid)) { continue; }
+
+        wchar_t *new_hwid2 = _wcsdup(new_hwid);
+        if (!new_hwid2) {
+            err = TUNA_OUT_OF_MEMORY;
+            goto out;
+        }
+        free(*hwid); *hwid = new_hwid2;
+    }
+
+    if ((err = tuna_set_device_string_list_property(dev_info, dev_info_data,
+                                                    SPDRP_HARDWAREID, hwids)))
+    { goto out; }
+
+  out:;
+    tuna_free_string_list(hwids);
+
+    return err;
+}
+
+static wchar_t const tuna_quote_prefix[] = L"tuna-quoted-";
+
+
+
 //static
 //tuna_error
 //tuna_find_devices(HDEVINFO *dev_info_out, wchar_t const *hardware_id) {
