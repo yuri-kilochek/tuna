@@ -193,7 +193,6 @@ tuna_unextrude_driver(tuna_extruded_driver const *extruded) {
     if (tuna_join_paths(&subdir, dir, L"*")) { goto out; }
 
     WIN32_FIND_DATAW data;
-    wchar_t *name = data.cFileName;
     handle = FindFirstFileExW(subdir,
                               FindExInfoBasic,
                               &data,
@@ -202,6 +201,7 @@ tuna_unextrude_driver(tuna_extruded_driver const *extruded) {
                               0);
     if (handle == INVALID_HANDLE_VALUE) { goto out; }
     do {
+        wchar_t *name = data.cFileName;
         if (!wcscmp(name, L".")) { continue; }
         if (!wcscmp(name, L"..")) { continue; }
 
@@ -324,11 +324,12 @@ tuna_parse_reg_multi_sz(tuna_string_list *list_out, wchar_t const *multi_sz) {
     for (size_t i = 0; i < list.len; ++i) {
         size_t len = wcslen(sz);
 
-        if (!(list.items[i] = malloc((len + 1) * sizeof(*list.items[i])))) {
+        wchar_t **str = &list.items[i];
+        if (!(*str = malloc((len + 1) * sizeof(**str)))) {
             err = TUNA_OUT_OF_MEMORY;
             goto out;
         }
-        wcscpy(list.items[i], sz);
+        wcscpy(*str, sz);
 
         sz += len + 1;
     }
