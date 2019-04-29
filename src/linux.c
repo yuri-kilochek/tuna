@@ -279,7 +279,7 @@ tuna_set_status(tuna_device *dev, tuna_status status) {
 }
 
 tuna_error
-tuna_get_ifindex(tuna_device const *dev, int *index) {
+tuna_get_index(tuna_device const *dev, int *index) {
     *index = dev->ifindex;
     return 0;
 }

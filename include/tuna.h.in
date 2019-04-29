@@ -128,7 +128,7 @@ tuna_set_status(tuna_device *device, tuna_status status);
 
 TUNA_PRIV_API
 tuna_error
-tuna_get_ifindex(tuna_device const *device, int *index);
+tuna_get_index(tuna_device const *device, int *index);
 
 ///////////////////////////////////////////////////////////////////////////////
 
