@@ -240,20 +240,6 @@ tuna_set_ownership(tuna_device *device, tuna_ownership ownership);
 
 ///////////////////////////////////////////////////////////////////////////////
 
-TUNA_PRIV_API
-tuna_error
-tuna_open(tuna_device *device);
-
-TUNA_PRIV_API
-int
-tuna_is_open(tuna_device const *device);
-
-TUNA_PRIV_API
-void
-tuna_close(tuna_device *device);
-
-///////////////////////////////////////////////////////////////////////////////
-
 #if TUNA_PRIV_OS_WINDOWS
     typedef void *tuna_io_handle;
 #else
@@ -262,7 +248,7 @@ tuna_close(tuna_device *device);
 
 TUNA_PRIV_API
 tuna_io_handle
-tuna_get_io_handle(tuna_device const *device);
+tuna_get_io_handle(tuna_device *device);
 
 ///////////////////////////////////////////////////////////////////////////////
 #if __cplusplus
