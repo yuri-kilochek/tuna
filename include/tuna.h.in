@@ -88,7 +88,7 @@ typedef struct tuna_device tuna_device;
 
 TUNA_PRIV_API
 tuna_error
-tuna_create_device(tuna_device **device);
+tuna_get_device(tuna_device **device);
 
 TUNA_PRIV_API
 void
@@ -237,6 +237,20 @@ tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership);
 TUNA_PRIV_API
 tuna_error
 tuna_set_ownership(tuna_device *device, tuna_ownership ownership);
+
+///////////////////////////////////////////////////////////////////////////////
+
+TUNA_PRIV_API
+tuna_error
+tuna_open(tuna_device *device);
+
+TUNA_PRIV_API
+int
+tuna_is_open(tuna_device const *device);
+
+TUNA_PRIV_API
+void
+tuna_close(tuna_device *device);
 
 ///////////////////////////////////////////////////////////////////////////////
 
