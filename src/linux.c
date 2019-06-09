@@ -60,60 +60,36 @@ struct tuna_device {
     int index;
 };
 
-static
+void
+tuna_close_device(tuna_device *device) {
+    if (device) {
+        if (device->fd != -1) { close(device->fd); }
+        nl_socket_free(device->nl_sock);
+        pthread_mutex_destroy(&device->mutex);
+    }
+    free(device);
+}
+
 tuna_error
-tuna_disable_default_local_ip6_addr(tuna_device *device) {
-    struct nl_msg *nl_msg = NULL;
-    
+tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
     int err = 0;
 
-    if (!(nl_msg = nlmsg_alloc_simple(RTM_NEWLINK, 0))) {
-        err = TUNA_OUT_OF_MEMORY;
+    // TODO: device->fd can be -1 here, wat do? probably return special error
+    // code like INVALID_STATE
+
+    struct ifreq ifr;
+    if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
+        err = tuna_translate_syserr(errno);
         goto out;
     }
 
-    struct ifinfomsg ifi = {.ifi_index = device->index};
-    if ((err = nlmsg_append(nl_msg, &ifi, sizeof(ifi), NLMSG_ALIGNTO))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    struct nlattr *ifla_af_spec_nlattr;
-    if (!(ifla_af_spec_nlattr = nla_nest_start(nl_msg, IFLA_AF_SPEC))) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-
-    struct nlattr *af_inet6_nlattr;
-    if (!(af_inet6_nlattr = nla_nest_start(nl_msg, AF_INET6))) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-
-    if ((err = nla_put_u8(nl_msg, IFLA_INET6_ADDR_GEN_MODE,
-                                  IN6_ADDR_GEN_MODE_NONE)))
-    {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    nla_nest_end(nl_msg, af_inet6_nlattr);
-
-    nla_nest_end(nl_msg, ifla_af_spec_nlattr);
-
-    if ((err = nl_send_auto(device->nl_sock, nl_msg)) < 0) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_wait_for_ack(device->nl_sock))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
+    if (ifr.ifr_flags & IFF_MULTI_QUEUE) {
+        *ownership = TUNA_SHARED;
+    } else {
+        *ownership = TUNA_EXCLUSIVE;
     }
 
 out:
-    nlmsg_free(nl_msg);
-
     return err;
 }
 
@@ -154,10 +130,10 @@ out:
     return err;
 }
 
+static
 tuna_error
-tuna_get_device(tuna_device **device_out) {
+tuna_allocate_device(tuna_device **device_out) {
     tuna_device *device = NULL;
-    struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;
 
@@ -172,6 +148,121 @@ tuna_get_device(tuna_device **device_out) {
 
     if ((err = tuna_open_nl_sock(&device->nl_sock))) { goto out; }
 
+    *device_out = device; device = NULL;
+
+out:
+    tuna_close_device(device);
+
+    return err;
+}
+
+static
+tuna_error
+tuna_index_to_name(struct nl_sock *nl_sock, int index, char *name) {
+    struct rtnl_link *rtnl_link = NULL;
+
+    int err = 0;
+
+    if ((err = rtnl_link_get_kernel(nl_sock, index, NULL, &rtnl_link))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    strcpy(name, rtnl_link_get_name(rtnl_link));
+
+out:
+    rtnl_link_put(rtnl_link);
+
+    return err;
+}
+
+static
+tuna_error
+tuna_name_to_index(struct nl_sock *nl_sock, char const *name, int *index) {
+    struct rtnl_link *rtnl_link = NULL;
+
+    int err = 0;
+
+    if ((err = rtnl_link_get_kernel(nl_sock, 0, name, &rtnl_link))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    *index = rtnl_link_get_ifindex(rtnl_link);
+
+out:
+    rtnl_link_put(rtnl_link);
+
+    return err;
+}
+
+//static
+//tuna_error
+//tuna_disable_default_local_ip6_addr(tuna_device *device) {
+//    struct nl_msg *nl_msg = NULL;
+//    
+//    int err = 0;
+//
+//    if (!(nl_msg = nlmsg_alloc_simple(RTM_NEWLINK, 0))) {
+//        err = TUNA_OUT_OF_MEMORY;
+//        goto out;
+//    }
+//
+//    struct ifinfomsg ifi = {.ifi_index = device->index};
+//    if ((err = nlmsg_append(nl_msg, &ifi, sizeof(ifi), NLMSG_ALIGNTO))) {
+//        err = tuna_translate_nlerr(-err);
+//        goto out;
+//    }
+//
+//    struct nlattr *ifla_af_spec_nlattr;
+//    if (!(ifla_af_spec_nlattr = nla_nest_start(nl_msg, IFLA_AF_SPEC))) {
+//        err = TUNA_OUT_OF_MEMORY;
+//        goto out;
+//    }
+//
+//    struct nlattr *af_inet6_nlattr;
+//    if (!(af_inet6_nlattr = nla_nest_start(nl_msg, AF_INET6))) {
+//        err = TUNA_OUT_OF_MEMORY;
+//        goto out;
+//    }
+//
+//    if ((err = nla_put_u8(nl_msg, IFLA_INET6_ADDR_GEN_MODE,
+//                                  IN6_ADDR_GEN_MODE_NONE)))
+//    {
+//        err = tuna_translate_nlerr(-err);
+//        goto out;
+//    }
+//
+//    nla_nest_end(nl_msg, af_inet6_nlattr);
+//
+//    nla_nest_end(nl_msg, ifla_af_spec_nlattr);
+//
+//    if ((err = nl_send_auto(device->nl_sock, nl_msg)) < 0) {
+//        err = tuna_translate_nlerr(-err);
+//        goto out;
+//    }
+//
+//    if ((err = nl_wait_for_ack(device->nl_sock))) {
+//        err = tuna_translate_nlerr(-err);
+//        goto out;
+//    }
+//
+//out:
+//    nlmsg_free(nl_msg);
+//
+//    return err;
+//}
+
+tuna_error
+tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
+                 tuna_device const *attach_target)
+{
+    tuna_device *device = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_allocate_device(&device))) { goto out; }
+
 open:
     if ((device->fd = open("/dev/net/tun", O_RDWR)) == -1) {
         err = tuna_translate_syserr(errno);
@@ -179,50 +270,67 @@ open:
     }
 
     struct ifreq ifr = {.ifr_flags = IFF_TUN | IFF_NO_PI};
+    if (ownership == TUNA_SHARED) { ifr.ifr_flags |= IFF_MULTI_QUEUE; }
+    if (attach_target) {
+        if ((err = tuna_index_to_name(device->nl_sock,
+                                      attach_target->index, ifr.ifr_name)))
+        { goto out; }
+    }
     if (ioctl(device->fd, TUNSETIFF, &ifr) == -1) {
         err = tuna_translate_syserr(errno);
         goto out;
     }
 
-    switch ((err = rtnl_link_get_kernel(device->nl_sock,
-                                        0, ifr.ifr_name, &rtnl_link)))
-    {
-    case 0:
-        break;
-    case -NLE_OBJ_NOTFOUND:
-        close(device->fd);
-        goto open;
-    default:
-        err = tuna_translate_nlerr(-err);
-        goto out;
+    if (attach_target) {
+        device->index = attach_target->index;
+    } else {
+        switch ((err = tuna_name_to_index(device->nl_sock,
+                                          ifr.ifr_name, &device->index)))
+        {
+        case 0:
+            break;
+        case TUNA_DEVICE_LOST:
+            close(device->fd); device->fd = -1;
+            goto open;
+        default:
+            goto out;
+        }
     }
-    device->index = rtnl_link_get_ifindex(rtnl_link);
 
-    if ((err = tuna_disable_default_local_ip6_addr(device))) { goto out; }
+    //if ((err = tuna_disable_default_local_ip6_addr(device))) { goto out; }
 
     *device_out = device; device = NULL;
 
 out:
-    rtnl_link_put(rtnl_link);
-    tuna_free_device(device);
+    tuna_close_device(device);
 
     return err;
 }
 
-void
-tuna_free_device(tuna_device *device) {
-    if (device) {
-        if (device->fd != -1) { close(device->fd); }
-        nl_socket_free(device->nl_sock);
-        pthread_mutex_destroy(&device->mutex);
-    }
-    free(device);
-}
-
 struct tuna_device_list {
     size_t size;
-    tuna_device items[];
+    tuna_device *items[];
 };
+
+void
+tuna_free_device_list(tuna_device_list *list) {
+    if (list) {
+        while (list->size--) {
+            tuna_close_device(list->items[list->size]);
+        }
+    }
+    free(list);
+}
+
+size_t
+tuna_get_device_count(tuna_device_list const *list) {
+    return list->size;
+}
+
+tuna_device const *
+tuna_get_device_at(tuna_device_list const *list, size_t index) {
+    return list->items[index];
+}
 
 static
 int
@@ -236,6 +344,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
     struct nl_sock *nl_sock = NULL;
     struct nl_cache *nl_cache = NULL;
     tuna_device_list *list = NULL;
+    tuna_device *device = NULL;
 
     int err = 0;
 
@@ -265,24 +374,16 @@ tuna_get_device_list(tuna_device_list **list_out) {
         struct rtnl_link *rtnl_link = (void *)nl_object;
         if (!tuna_is_managed(rtnl_link)) { continue; }
 
-        tuna_device *device = &list->items[list->size++];
-        *device = (tuna_device){
-            .mutex = PTHREAD_MUTEX_INITIALIZER,
-            .fd = -1,
-        };
-
-        if (list->size == 1) {
-            device->nl_sock = nl_sock; nl_sock = NULL;
-        } else {
-            if ((err = tuna_open_nl_sock(&device->nl_sock))) { goto out; }
-        }
-
+        if ((err = tuna_allocate_device(&device))) { goto out; }
         device->index = rtnl_link_get_ifindex(rtnl_link);
+
+        list->items[list->size++] = device; device = NULL;
     }
 
     *list_out = list; list = NULL;
 
 out:
+    tuna_close_device(device);
     tuna_free_device_list(list);
     nl_cache_free(nl_cache);
     nl_socket_free(nl_sock);
@@ -290,28 +391,24 @@ out:
     return err;
 }
 
-size_t
-tuna_get_device_count(tuna_device_list const *list) {
-    return list->size;
-}
 
-tuna_device const *
-tuna_get_device_at(tuna_device_list const *list, size_t index) {
-    return &list->items[index];
-}
 
-void
-tuna_free_device_list(tuna_device_list *list) {
-    if (list) {
-        for (size_t i = 0; i < list->size; ++i) {
-            tuna_device *device = &list->items[i];
 
-            nl_socket_free(device->nl_sock);
-            pthread_mutex_destroy(&device->mutex);
-        }
-    }
-    free(list);
-}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 //tuna_io_handle 
 //tuna_get_io_handle(tuna_device const *dev) {
