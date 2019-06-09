@@ -21,17 +21,17 @@ static
 tuna_error
 tuna_translate_syserr(int err) {
     switch (err) {
-      case 0:;
+    case 0:
         return 0;
-      case EPERM:;
+    case EPERM:
         return TUNA_FORBIDDEN;
-      case ENOMEM:;
-      case ENOBUFS:;
+    case ENOMEM:
+    case ENOBUFS:
         return TUNA_OUT_OF_MEMORY;
-      case EMFILE:;
-      case ENFILE:;
+    case EMFILE:
+    case ENFILE:
         return TUNA_TOO_MANY_HANDLES;
-      default:;
+    default:
         return TUNA_UNEXPECTED;
     }
 }
@@ -40,15 +40,15 @@ static
 tuna_error
 tuna_translate_nlerr(int err) {
     switch (err) {
-      case 0:;
+    case 0:
         return 0;
-      case NLE_PERM:;
+    case NLE_PERM:
         return TUNA_FORBIDDEN;
-      case NLE_NOMEM:;
+    case NLE_NOMEM:
         return TUNA_OUT_OF_MEMORY;
-      case NLE_OBJ_NOTFOUND:;
+    case NLE_OBJ_NOTFOUND:
         return TUNA_DEVICE_LOST;
-      default:;
+    default:
         return TUNA_UNEXPECTED;
     }
 }
@@ -111,7 +111,7 @@ tuna_disable_default_local_ip6_addr(tuna_device *device) {
         goto out;
     }
 
-  out:;
+out:
     nlmsg_free(nl_msg);
 
     return err;
@@ -131,24 +131,24 @@ tuna_open_nl_sock(struct nl_sock **nl_sock_out) {
 
     errno = 0;
     switch ((err = nl_connect(nl_sock, NETLINK_ROUTE))) {
-      case 0:;
+    case 0:
         break;
-      case -NLE_FAILURE:;
+    case -NLE_FAILURE:
         switch (errno) {
-          case EMFILE:;
-          case ENFILE:;
+        case EMFILE:
+        case ENFILE:
             err = TUNA_TOO_MANY_HANDLES;
             goto out;
         }
         /* fallthrough */
-      default:;
+    default:
         err = tuna_translate_nlerr(-err);
         goto out;
     }
 
     *nl_sock_out = nl_sock; nl_sock = NULL;
 
-  out:;
+out:
     nl_socket_free(nl_sock);
 
     return err;
@@ -172,7 +172,7 @@ tuna_get_device(tuna_device **device_out) {
 
     if ((err = tuna_open_nl_sock(&device->nl_sock))) { goto out; }
 
-  open:;
+open:
     if ((device->fd = open("/dev/net/tun", O_RDWR)) == -1) {
         err = tuna_translate_syserr(errno);
         goto out;
@@ -187,12 +187,12 @@ tuna_get_device(tuna_device **device_out) {
     switch ((err = rtnl_link_get_kernel(device->nl_sock,
                                         0, ifr.ifr_name, &rtnl_link)))
     {
-      case 0:;
+    case 0:
         break;
-      case -NLE_OBJ_NOTFOUND:;
+    case -NLE_OBJ_NOTFOUND:
         close(device->fd);
         goto open;
-      default:;
+    default:
         err = tuna_translate_nlerr(-err);
         goto out;
     }
@@ -202,7 +202,7 @@ tuna_get_device(tuna_device **device_out) {
 
     *device_out = device; device = NULL;
 
-  out:;
+out:
     rtnl_link_put(rtnl_link);
     tuna_free_device(device);
 
@@ -226,7 +226,7 @@ struct tuna_device_list {
 
 static
 int
-tuna_is_managed_rtnl_link(struct rtnl_link *rtnl_link) {
+tuna_is_managed(struct rtnl_link *rtnl_link) {
     char const *type = rtnl_link_get_type(rtnl_link);
     return !strcmp(type, "tun");
 }
@@ -251,7 +251,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
         struct rtnl_link *rtnl_link = (void *)nl_object;
-        list_size += !!tuna_is_managed_rtnl_link(rtnl_link);
+        list_size += !!tuna_is_managed(rtnl_link);
     }
 
     if (!(list = malloc(sizeof(*list) + list_size * sizeof(*list->items)))) {
@@ -263,7 +263,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
         struct rtnl_link *rtnl_link = (void *)nl_object;
-        if (!tuna_is_managed_rtnl_link(rtnl_link)) { continue; }
+        if (!tuna_is_managed(rtnl_link)) { continue; }
 
         tuna_device *device = &list->items[list->size++];
         *device = (tuna_device){
@@ -282,7 +282,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
 
     *list_out = list; list = NULL;
 
-  out:;
+out:
     tuna_free_device_list(list);
     nl_cache_free(nl_cache);
     nl_socket_free(nl_sock);
