@@ -6,8 +6,8 @@
 
 #include <fcntl.h>
 #include <unistd.h>
-#include <pthread.h>
 #include <sys/ioctl.h>
+#include <net/if.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
 
@@ -15,7 +15,23 @@
 #include <netlink/route/link.h>
 #include <netlink/route/addr.h>
 
+/// REMOVE
+#include <stdio.h>
+
 ///////////////////////////////////////////////////////////////////////////////
+
+struct tuna_device {
+    int index;
+    int fd;
+};
+
+void
+tuna_close_device(tuna_device *device) {
+    if (device) {
+        if (device->fd != -1) { close(device->fd); }
+    }
+    free(device);
+}
 
 static
 tuna_error
@@ -31,9 +47,33 @@ tuna_translate_syserr(int err) {
     case EMFILE:
     case ENFILE:
         return TUNA_TOO_MANY_HANDLES;
+    case ENXIO:
+    case ENODEV:
+        return TUNA_DEVICE_LOST;
+    case EBUSY:
+        return TUNA_DEVICE_BUSY;
     default:
         return TUNA_UNEXPECTED;
     }
+}
+
+
+
+static
+tuna_error
+tuna_get_ownership_ioctl(int fd, tuna_ownership *ownership) {
+    struct ifreq ifr;
+    if (ioctl(fd, TUNGETIFF, &ifr) == -1) {
+        return tuna_translate_syserr(errno);
+    }
+
+    if (ifr.ifr_flags & IFF_MULTI_QUEUE) {
+        *ownership = TUNA_SHARED;
+    } else {
+        *ownership = TUNA_EXCLUSIVE;
+    }
+
+    return 0;
 }
 
 static
@@ -53,46 +93,6 @@ tuna_translate_nlerr(int err) {
     }
 }
 
-struct tuna_device {
-    pthread_mutex_t mutex;
-    struct nl_sock *nl_sock;
-    int fd;
-    int index;
-};
-
-void
-tuna_close_device(tuna_device *device) {
-    if (device) {
-        if (device->fd != -1) { close(device->fd); }
-        nl_socket_free(device->nl_sock);
-        pthread_mutex_destroy(&device->mutex);
-    }
-    free(device);
-}
-
-tuna_error
-tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
-    int err = 0;
-
-    // TODO: device->fd can be -1 here, wat do? probably return special error
-    // code like INVALID_STATE
-
-    struct ifreq ifr;
-    if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
-        err = tuna_translate_syserr(errno);
-        goto out;
-    }
-
-    if (ifr.ifr_flags & IFF_MULTI_QUEUE) {
-        *ownership = TUNA_SHARED;
-    } else {
-        *ownership = TUNA_EXCLUSIVE;
-    }
-
-out:
-    return err;
-}
-
 static
 tuna_error
 tuna_open_nl_sock(struct nl_sock **nl_sock_out) {
@@ -100,24 +100,26 @@ tuna_open_nl_sock(struct nl_sock **nl_sock_out) {
 
     int err = 0;
 
+    errno = 0;
     if (!(nl_sock = nl_socket_alloc())) {
-        err = TUNA_OUT_OF_MEMORY;
+        if (errno) {
+            err = tuna_translate_syserr(errno);
+        } else {
+            err = TUNA_OUT_OF_MEMORY;
+        }
         goto out;
     }
 
     errno = 0;
-    switch ((err = nl_connect(nl_sock, NETLINK_ROUTE))) {
-    case 0:
-        break;
-    case -NLE_FAILURE:
-        switch (errno) {
-        case EMFILE:
-        case ENFILE:
-            err = TUNA_TOO_MANY_HANDLES;
-            goto out;
+    if ((err = nl_connect(nl_sock, NETLINK_ROUTE))) {
+        if (err == -NLE_FAILURE) {
+            switch (errno) {
+            case EMFILE:
+            case ENFILE:
+                err = TUNA_TOO_MANY_HANDLES;
+                goto out;
+            }
         }
-        /* fallthrough */
-    default:
         err = tuna_translate_nlerr(-err);
         goto out;
     }
@@ -132,68 +134,88 @@ out:
 
 static
 tuna_error
-tuna_allocate_device(tuna_device **device_out) {
-    tuna_device *device = NULL;
+tuna_get_ownership_nl(int index, tuna_ownership *ownership) {
+    struct nl_sock *nl_sock = NULL;
 
     int err = 0;
 
-    if (!(device = malloc(sizeof(*device)))) {
+    if ((err = tuna_open_nl_sock(&nl_sock))) { goto out; }
+
+
+    // TODO:
+
+
+out:
+    nl_socket_free(nl_sock);
+
+    return err;
+}
+
+tuna_error
+tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
+    if (device->fd != -1) {
+        return tuna_get_ownership_ioctl(device->fd, ownership);
+    } else {
+        return tuna_get_ownership_nl(device->index, ownership);
+    }
+}
+
+void
+tuna_free_name(char *name) {
+    free(name);
+}
+
+static
+tuna_error
+tuna_get_name_byob(tuna_device const *device, char *name) {
+    if (device->fd != -1) {
+        struct ifreq ifr;
+        if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
+            return tuna_translate_syserr(errno);
+        }
+        strcpy(name, ifr.ifr_name);
+    } else {
+        if (!if_indextoname(device->index, name)) {
+            return tuna_translate_syserr(errno);
+        }
+    }
+    return 0;
+}
+
+tuna_error
+tuna_get_name(tuna_device const *device, char **name_out) {
+    char *name = NULL;
+
+    int err = 0;
+
+    if (!(name = malloc(IFNAMSIZ))) {
         err = tuna_translate_syserr(errno);
         goto out;
     }
-    *device = (tuna_device){
-        .mutex = PTHREAD_MUTEX_INITIALIZER,
-        .fd = -1,
-    };
 
-    if ((err = tuna_open_nl_sock(&device->nl_sock))) { goto out; }
+    if ((err = tuna_get_name_byob(device, name))) { goto out; }
 
-    *device_out = device; device = NULL;
+    *name_out = name; name = NULL;
 
 out:
-    tuna_close_device(device);
+    tuna_free_name(name);
 
     return err;
 }
 
 static
 tuna_error
-tuna_index_to_name(struct nl_sock *nl_sock, int index, char *name) {
-    struct rtnl_link *rtnl_link = NULL;
+tuna_allocate_device(tuna_device **device_out) {
+    tuna_device *device = NULL;
 
-    int err = 0;
-
-    if ((err = rtnl_link_get_kernel(nl_sock, index, NULL, &rtnl_link))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
+    if (!(device = malloc(sizeof(*device)))) {
+        return tuna_translate_syserr(errno);
     }
+    *device = (tuna_device){.fd = -1};
 
-    strcpy(name, rtnl_link_get_name(rtnl_link));
+    *device_out = device;
 
-out:
-    rtnl_link_put(rtnl_link);
-
-    return err;
-}
-
-static
-tuna_error
-tuna_name_to_index(struct nl_sock *nl_sock, char const *name, int *index) {
-    struct rtnl_link *rtnl_link = NULL;
-
-    int err = 0;
-
-    if ((err = rtnl_link_get_kernel(nl_sock, 0, name, &rtnl_link))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    *index = rtnl_link_get_ifindex(rtnl_link);
-
-out:
-    rtnl_link_put(rtnl_link);
-
-    return err;
+    return 0;
 }
 
 //static
@@ -272,27 +294,28 @@ open:
     struct ifreq ifr = {.ifr_flags = IFF_TUN | IFF_NO_PI};
     if (ownership == TUNA_SHARED) { ifr.ifr_flags |= IFF_MULTI_QUEUE; }
     if (attach_target) {
-        if ((err = tuna_index_to_name(device->nl_sock,
-                                      attach_target->index, ifr.ifr_name)))
-        { goto out; }
+        if ((err = tuna_get_name_byob(attach_target, ifr.ifr_name))) {
+            goto out;
+        }
     }
     if (ioctl(device->fd, TUNSETIFF, &ifr) == -1) {
-        err = tuna_translate_syserr(errno);
+        if (errno == EINVAL) { // IFF_MULTI_QUEUE flag mismatch
+            err = TUNA_DEVICE_BUSY;
+        } else {
+            err = tuna_translate_syserr(errno);
+        }
         goto out;
     }
 
     if (attach_target) {
         device->index = attach_target->index;
     } else {
-        switch ((err = tuna_name_to_index(device->nl_sock,
-                                          ifr.ifr_name, &device->index)))
-        {
-        case 0:
-            break;
-        case TUNA_DEVICE_LOST:
-            close(device->fd); device->fd = -1;
-            goto open;
-        default:
+        if (!(device->index = if_nametoindex(ifr.ifr_name))) {
+            if (errno == ENODEV) {
+                close(device->fd); device->fd = -1;
+                goto open;
+            }
+            err = tuna_translate_syserr(errno);
             goto out;
         }
     }
@@ -307,89 +330,89 @@ out:
     return err;
 }
 
-struct tuna_device_list {
-    size_t size;
-    tuna_device *items[];
-};
-
-void
-tuna_free_device_list(tuna_device_list *list) {
-    if (list) {
-        while (list->size--) {
-            tuna_close_device(list->items[list->size]);
-        }
-    }
-    free(list);
-}
-
-size_t
-tuna_get_device_count(tuna_device_list const *list) {
-    return list->size;
-}
-
-tuna_device const *
-tuna_get_device_at(tuna_device_list const *list, size_t index) {
-    return list->items[index];
-}
-
-static
-int
-tuna_is_managed(struct rtnl_link *rtnl_link) {
-    char const *type = rtnl_link_get_type(rtnl_link);
-    return !strcmp(type, "tun");
-}
-
-tuna_error
-tuna_get_device_list(tuna_device_list **list_out) {
-    struct nl_sock *nl_sock = NULL;
-    struct nl_cache *nl_cache = NULL;
-    tuna_device_list *list = NULL;
-    tuna_device *device = NULL;
-
-    int err = 0;
-
-    if ((err = tuna_open_nl_sock(&nl_sock))) { goto out; }
-
-    if ((err = rtnl_link_alloc_cache(nl_sock, AF_UNSPEC, &nl_cache))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    size_t list_size = 0;
-    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
-         nl_object; nl_object = nl_cache_get_next(nl_object))
-    {
-        struct rtnl_link *rtnl_link = (void *)nl_object;
-        list_size += !!tuna_is_managed(rtnl_link);
-    }
-
-    if (!(list = malloc(sizeof(*list) + list_size * sizeof(*list->items)))) {
-        err = tuna_translate_syserr(errno);
-        goto out;
-    }
-    list->size = 0;
-    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
-         nl_object; nl_object = nl_cache_get_next(nl_object))
-    {
-        struct rtnl_link *rtnl_link = (void *)nl_object;
-        if (!tuna_is_managed(rtnl_link)) { continue; }
-
-        if ((err = tuna_allocate_device(&device))) { goto out; }
-        device->index = rtnl_link_get_ifindex(rtnl_link);
-
-        list->items[list->size++] = device; device = NULL;
-    }
-
-    *list_out = list; list = NULL;
-
-out:
-    tuna_close_device(device);
-    tuna_free_device_list(list);
-    nl_cache_free(nl_cache);
-    nl_socket_free(nl_sock);
-
-    return err;
-}
+//struct tuna_device_list {
+//    size_t size;
+//    tuna_device *items[];
+//};
+//
+//void
+//tuna_free_device_list(tuna_device_list *list) {
+//    if (list) {
+//        while (list->size--) {
+//            tuna_close_device(list->items[list->size]);
+//        }
+//    }
+//    free(list);
+//}
+//
+//size_t
+//tuna_get_device_count(tuna_device_list const *list) {
+//    return list->size;
+//}
+//
+//tuna_device const *
+//tuna_get_device_at(tuna_device_list const *list, size_t index) {
+//    return list->items[index];
+//}
+//
+//static
+//int
+//tuna_is_managed(struct rtnl_link *rtnl_link) {
+//    char const *type = rtnl_link_get_type(rtnl_link);
+//    return !strcmp(type, "tun");
+//}
+//
+//tuna_error
+//tuna_get_device_list(tuna_device_list **list_out) {
+//    struct nl_sock *nl_sock = NULL;
+//    struct nl_cache *nl_cache = NULL;
+//    tuna_device_list *list = NULL;
+//    tuna_device *device = NULL;
+//
+//    int err = 0;
+//
+//    if ((err = tuna_open_nl_sock(&nl_sock))) { goto out; }
+//
+//    if ((err = rtnl_link_alloc_cache(nl_sock, AF_UNSPEC, &nl_cache))) {
+//        err = tuna_translate_nlerr(-err);
+//        goto out;
+//    }
+//
+//    size_t list_size = 0;
+//    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
+//         nl_object; nl_object = nl_cache_get_next(nl_object))
+//    {
+//        struct rtnl_link *rtnl_link = (void *)nl_object;
+//        list_size += !!tuna_is_managed(rtnl_link);
+//    }
+//
+//    if (!(list = malloc(sizeof(*list) + list_size * sizeof(*list->items)))) {
+//        err = tuna_translate_syserr(errno);
+//        goto out;
+//    }
+//    list->size = 0;
+//    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
+//         nl_object; nl_object = nl_cache_get_next(nl_object))
+//    {
+//        struct rtnl_link *rtnl_link = (void *)nl_object;
+//        if (!tuna_is_managed(rtnl_link)) { continue; }
+//
+//        if ((err = tuna_allocate_device(&device))) { goto out; }
+//        device->index = rtnl_link_get_ifindex(rtnl_link);
+//
+//        list->items[list->size++] = device; device = NULL;
+//    }
+//
+//    *list_out = list; list = NULL;
+//
+//out:
+//    tuna_close_device(device);
+//    tuna_free_device_list(list);
+//    nl_cache_free(nl_cache);
+//    nl_socket_free(nl_sock);
+//
+//    return err;
+//}
 
 
 
