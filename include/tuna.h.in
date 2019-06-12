@@ -220,6 +220,9 @@ tuna_get_address_list(tuna_device const *device, tuna_address_list **list);
 
 ///////////////////////////////////////////////////////////////////////////////
 
+// TODO: it's unclear if attaching to unused persistent tun interface
+// reinitializes flags on linux, so try it and split this function
+// into create/attach variants if it does not.
 TUNA_PRIV_API
 tuna_error
 tuna_open_device(tuna_device **device, tuna_ownership ownership,

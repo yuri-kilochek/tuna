@@ -15,7 +15,7 @@
 #include <netlink/route/link.h>
 #include <netlink/route/addr.h>
 
-/// REMOVE
+/// TODO: remove
 #include <stdio.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -57,8 +57,6 @@ tuna_translate_syserr(int err) {
     }
 }
 
-
-
 static
 tuna_error
 tuna_get_ownership_ioctl(int fd, tuna_ownership *ownership) {
@@ -86,6 +84,7 @@ tuna_translate_nlerr(int err) {
         return TUNA_FORBIDDEN;
     case NLE_NOMEM:
         return TUNA_OUT_OF_MEMORY;
+    case NLE_NODEV:
     case NLE_OBJ_NOTFOUND:
         return TUNA_DEVICE_LOST;
     default:
@@ -133,19 +132,64 @@ out:
 }
 
 static
+int
+tuna_get_ownership_nl_cb(struct nl_msg *nl_msg, void *context) {
+    tuna_ownership *ownership = context;
+
+    struct nlattr *linkinfo =
+        nlmsg_find_attr(nlmsg_hdr(nl_msg), sizeof(struct ifinfomsg),
+                        IFLA_LINKINFO);
+    struct nlattr *info_data =
+        nla_find(nla_data(linkinfo), nla_len(linkinfo), IFLA_INFO_DATA);
+    struct nlattr *tun_multi_queue =
+        nla_find(nla_data(info_data), nla_len(info_data),
+                 IFLA_TUN_MULTI_QUEUE);
+
+    if (nla_get_u8(tun_multi_queue)) {
+        *ownership = TUNA_SHARED;
+    } else {
+        *ownership = TUNA_EXCLUSIVE;
+    }
+
+    return NL_STOP;
+}
+
+static
 tuna_error
 tuna_get_ownership_nl(int index, tuna_ownership *ownership) {
     struct nl_sock *nl_sock = NULL;
+    struct nl_msg *nl_msg = NULL;
 
     int err = 0;
 
     if ((err = tuna_open_nl_sock(&nl_sock))) { goto out; }
 
+    if ((err = nl_socket_modify_cb(nl_sock,
+                                   NL_CB_VALID, NL_CB_CUSTOM,
+                                   tuna_get_ownership_nl_cb, ownership)))
+    {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
 
-    // TODO:
+    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
 
+    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+    err = 0;
+
+    if ((err = nl_recvmsgs_default(nl_sock))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
 
 out:
+    nlmsg_free(nl_msg);
     nl_socket_free(nl_sock);
 
     return err;
@@ -300,7 +344,7 @@ open:
     }
     if (ioctl(device->fd, TUNSETIFF, &ifr) == -1) {
         if (errno == EINVAL) { // IFF_MULTI_QUEUE flag mismatch
-            err = TUNA_DEVICE_BUSY;
+            err = TUNA_DEVICE_BUSY; // TODO: maybe replace with special error
         } else {
             err = tuna_translate_syserr(errno);
         }
