@@ -215,6 +215,104 @@ tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
     }
 }
 
+static
+tuna_error
+tuna_get_lifetime_ioctl(int fd, tuna_lifetime *lifetime) {
+    struct ifreq ifr;
+    if (ioctl(fd, TUNGETIFF, &ifr) == -1) {
+        return tuna_translate_syserr(errno);
+    }
+
+    if (ifr.ifr_flags & IFF_PERSIST) {
+        *lifetime = TUNA_PERSISTENT;
+    } else {
+        *lifetime = TUNA_TRANSIENT;
+    }
+
+    return 0;
+}
+
+static
+int
+tuna_get_lifetime_nl_cb(struct nl_msg *nl_msg, void *context) {
+    tuna_lifetime *lifetime = context;
+
+    struct nlattr *linkinfo =
+        nlmsg_find_attr(nlmsg_hdr(nl_msg), sizeof(struct ifinfomsg),
+                        IFLA_LINKINFO);
+    struct nlattr *info_data =
+        nla_find(nla_data(linkinfo), nla_len(linkinfo), IFLA_INFO_DATA);
+    struct nlattr *tun_persist =
+        nla_find(nla_data(info_data), nla_len(info_data),
+                 IFLA_TUN_PERSIST);
+
+    if (nla_get_u8(tun_persist)) {
+        *lifetime = TUNA_PERSISTENT;
+    } else {
+        *lifetime = TUNA_TRANSIENT;
+    }
+
+    return NL_STOP;
+}
+
+static
+tuna_error
+tuna_get_lifetime_nl(int index, tuna_lifetime *lifetime) {
+    struct nl_sock *nl_sock = NULL;
+    struct nl_msg *nl_msg = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_open_nl_sock(&nl_sock))) {
+        goto out;
+    }
+
+    if ((err = nl_socket_modify_cb(nl_sock,
+                                   NL_CB_VALID, NL_CB_CUSTOM,
+                                   tuna_get_lifetime_nl_cb, lifetime)))
+    {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+    err = 0;
+
+    if ((err = nl_recvmsgs_default(nl_sock))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+out:
+    nlmsg_free(nl_msg);
+    nl_socket_free(nl_sock);
+
+    return err;
+}
+
+tuna_error
+tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
+    if (device->fd != -1) {
+        return tuna_get_lifetime_ioctl(device->fd, lifetime);
+    } else {
+        return tuna_get_lifetime_nl(device->index, lifetime);
+    }
+}
+
+tuna_error
+tuna_get_index(tuna_device const *device, int *index) {
+    *index = device->index;
+    return 0;
+}
+
 void
 tuna_free_name(char *name) {
     free(name);

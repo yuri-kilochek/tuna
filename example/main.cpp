@@ -24,143 +24,237 @@ int main() {
                   << TUNA_GET_PATCH_VERSION(v) << "\n";
     }
 
-    tuna_device* device;
-    switch (auto e = tuna_create_device(&device)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_create_device failed: " << tuna_get_error_name(e) << "\n";
+    tuna_device *device_a;
+    if (auto err = tuna_open_device(&device_a, TUNA_SHARED, NULL)) {
+        std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
     BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_destroy_device(device);
+        tuna_close_device(device_a);
     };
-    std::cout << "created interface " << std::flush;
+    std::cout << "created interface a" << std::flush;
 
-    char const *name;
-    switch (auto e = tuna_get_name(device, &name)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_get_name failed: " << tuna_get_error_name(e) << "\n";
+    char *name_a;
+    if (auto err = tuna_get_name(device_a, &name_a)) {
+        std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
-    std::cout << "named " << name << std::endl;
+    BOOST_SCOPE_EXIT_ALL(&) {
+        tuna_free_name(name_a);
+    };
+    std::cout << " named " << name_a << std::endl;
 
-    std::string new_name = "footun";
-    switch (auto e = tuna_set_name(device, new_name.data())) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_set_name failed: " << tuna_get_error_name(e) << "\n";
+    tuna_ownership ownership;
+    if (auto err = tuna_get_ownership(device_a, &ownership)) {
+        std::cerr << "tuna_get_ownership failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
-    std::cout << "renamed to " << new_name << std::endl;
+    std::cout << "ownership: " << (ownership ? "shared" : "exclusive") << std::endl;
 
-    std::size_t mtu;
-    switch (auto e = tuna_get_mtu(device, &mtu)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_get_mtu failed: " << tuna_get_error_name(e) << "\n";
+    tuna_device *device_b;
+    if (auto err = tuna_open_device(&device_b, TUNA_SHARED, device_a)) {
+        std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
-    std::cout << "mtu is " << mtu << std::endl;
+    BOOST_SCOPE_EXIT_ALL(&) {
+        tuna_close_device(device_b);
+    };
+    std::cout << "attached interface b" << std::flush;
 
-    std::size_t new_mtu = 2000;
-    switch (auto e = tuna_set_mtu(device, new_mtu)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_set_mtu failed: " << tuna_get_error_name(e) << "\n";
+    char *name_b;
+    if (auto err = tuna_get_name(device_a, &name_b)) {
+        std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
-    std::cout << "changed mtu to " << new_mtu << std::endl;
+    BOOST_SCOPE_EXIT_ALL(&) {
+        tuna_free_name(name_b);
+    };
+    std::cout << " named " << name_b << std::endl;
 
-    switch (auto e = tuna_set_status(device, TUNA_UP)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e) << "\n";
+    tuna_device_list *devices;
+    if (auto err = tuna_get_device_list(&devices)) {
+        std::cerr << "tuna_get_device_list failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
+    BOOST_SCOPE_EXIT_ALL(&) {
+        tuna_free_device_list(devices);
+    };
+    std::cout << "all devices:\n";
+    for (size_t i = 0; i < tuna_get_device_count(devices); ++i) {
+        tuna_device const *device = tuna_get_device_at(devices, i);
 
-    tuna_address new_address;
-    new_address.family = TUNA_IP4;
-    new_address.ip4.value[0] = 20;
-    new_address.ip4.value[1] = 30;
-    new_address.ip4.value[2] = 40;
-    new_address.ip4.value[3] = 50;
-    new_address.ip4.prefix_length = 24;
-    switch (auto e = tuna_add_address(device, &new_address)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
-        return EXIT_FAILURE;
-    }
-    switch (auto e = tuna_add_address(device, &new_address)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
-        return EXIT_FAILURE;
-    }
-
-    tuna_address const* addresses;
-    std::size_t address_count;
-    switch (auto e = tuna_get_addresses(device, &addresses, &address_count)) {
-      case 0:
-        break;
-      default:
-        std::cerr << "tuna_get_addresses failed: " << tuna_get_error_name(e) << "\n";
-        return EXIT_FAILURE;
-    }
-
-    std::cout << "addresses:\n";
-    for (std::size_t i = 0; i < address_count; ++i) {
-        auto& a = addresses[i];
-        switch (a.family) {
-          case TUNA_IP4:
-            std::cout << "\tip4 "
-                      << (int)a.ip4.value[0] << "."
-                      << (int)a.ip4.value[1] << "."
-                      << (int)a.ip4.value[2] << "."
-                      << (int)a.ip4.value[3] << "/"
-                      << (int)a.ip4.prefix_length << "\n";
-            break;
-          case TUNA_IP6:
-            std::cout << "\tip6 "
-                      << std::hex
-                      << (int)a.ip6.value[ 0] << (int)a.ip6.value[ 1] << ":"
-                      << (int)a.ip6.value[ 2] << (int)a.ip6.value[ 3] << ":"
-                      << (int)a.ip6.value[ 4] << (int)a.ip6.value[ 5] << ":"
-                      << (int)a.ip6.value[ 6] << (int)a.ip6.value[ 7] << ":"
-                      << (int)a.ip6.value[ 8] << (int)a.ip6.value[ 9] << ":"
-                      << (int)a.ip6.value[10] << (int)a.ip6.value[11] << ":"
-                      << (int)a.ip6.value[12] << (int)a.ip6.value[13] << ":"
-                      << (int)a.ip6.value[14] << (int)a.ip6.value[15] << "/"
-                      << std::dec
-                      << (int)a.ip6.prefix_length << "\n";
-            break;
-          default:
-            std::cout << "unknown\n";
-            break;
-        }
-    }
-
-    for (int i = 0; i < 10; ++i) {
-        std::this_thread::sleep_for(std::chrono::seconds(1));
-
-        tuna_status status = (i % 2) ? TUNA_UP : TUNA_DOWN;
-        switch (auto e = tuna_set_status(device, status)) {
-          case 0:
-            break;
-          default:
-            std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e) << "\n";
+        int index;
+        if (auto err = tuna_get_index(device, &index)) {
+            std::cerr << "tuna_get_index failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
 
-        std::cout << (1 + i) << " status: " << status << std::endl;
+        char *name;
+        if (auto err = tuna_get_name(device, &name)) {
+            std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
+        BOOST_SCOPE_EXIT_ALL(&) {
+            tuna_free_name(name);
+        };
+        std::cout << "  " << index << ": " << name << "\n";
+
+        tuna_ownership ownership;
+        if (auto err = tuna_get_ownership(device, &ownership)) {
+            std::cerr << "tuna_get_ownership failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
+        std::cout << "    ownership: " << (ownership ? "shared" : "exclusive") << "\n";
+
+        tuna_lifetime lifetime;
+        if (auto err = tuna_get_lifetime(device, &lifetime)) {
+            std::cerr << "tuna_get_lifetime failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
+        std::cout << "    lifetime: " << (lifetime ? "persistent" : "transient") << "\n";
+    }
+    std::cout << std::flush;
+
+
+
+    //tuna_device* device;
+    //switch (auto e = tuna_create_device(&device)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_create_device failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //BOOST_SCOPE_EXIT_ALL(&) {
+    //    tuna_destroy_device(device);
+    //};
+    //std::cout << "created interface " << std::flush;
+
+    //char const *name;
+    //switch (auto e = tuna_get_name(device, &name)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_get_name failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //std::cout << "named " << name << std::endl;
+
+    //std::string new_name = "footun";
+    //switch (auto e = tuna_set_name(device, new_name.data())) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_set_name failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //std::cout << "renamed to " << new_name << std::endl;
+
+    //std::size_t mtu;
+    //switch (auto e = tuna_get_mtu(device, &mtu)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_get_mtu failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //std::cout << "mtu is " << mtu << std::endl;
+
+    //std::size_t new_mtu = 2000;
+    //switch (auto e = tuna_set_mtu(device, new_mtu)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_set_mtu failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //std::cout << "changed mtu to " << new_mtu << std::endl;
+
+    //switch (auto e = tuna_set_status(device, TUNA_UP)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+
+    //tuna_address new_address;
+    //new_address.family = TUNA_IP4;
+    //new_address.ip4.value[0] = 20;
+    //new_address.ip4.value[1] = 30;
+    //new_address.ip4.value[2] = 40;
+    //new_address.ip4.value[3] = 50;
+    //new_address.ip4.prefix_length = 24;
+    //switch (auto e = tuna_add_address(device, &new_address)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //switch (auto e = tuna_add_address(device, &new_address)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+
+    //tuna_address const* addresses;
+    //std::size_t address_count;
+    //switch (auto e = tuna_get_addresses(device, &addresses, &address_count)) {
+    //  case 0:
+    //    break;
+    //  default:
+    //    std::cerr << "tuna_get_addresses failed: " << tuna_get_error_name(e) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+
+    //std::cout << "addresses:\n";
+    //for (std::size_t i = 0; i < address_count; ++i) {
+    //    auto& a = addresses[i];
+    //    switch (a.family) {
+    //      case TUNA_IP4:
+    //        std::cout << "\tip4 "
+    //                  << (int)a.ip4.value[0] << "."
+    //                  << (int)a.ip4.value[1] << "."
+    //                  << (int)a.ip4.value[2] << "."
+    //                  << (int)a.ip4.value[3] << "/"
+    //                  << (int)a.ip4.prefix_length << "\n";
+    //        break;
+    //      case TUNA_IP6:
+    //        std::cout << "\tip6 "
+    //                  << std::hex
+    //                  << (int)a.ip6.value[ 0] << (int)a.ip6.value[ 1] << ":"
+    //                  << (int)a.ip6.value[ 2] << (int)a.ip6.value[ 3] << ":"
+    //                  << (int)a.ip6.value[ 4] << (int)a.ip6.value[ 5] << ":"
+    //                  << (int)a.ip6.value[ 6] << (int)a.ip6.value[ 7] << ":"
+    //                  << (int)a.ip6.value[ 8] << (int)a.ip6.value[ 9] << ":"
+    //                  << (int)a.ip6.value[10] << (int)a.ip6.value[11] << ":"
+    //                  << (int)a.ip6.value[12] << (int)a.ip6.value[13] << ":"
+    //                  << (int)a.ip6.value[14] << (int)a.ip6.value[15] << "/"
+    //                  << std::dec
+    //                  << (int)a.ip6.prefix_length << "\n";
+    //        break;
+    //      default:
+    //        std::cout << "unknown\n";
+    //        break;
+    //    }
+    //}
+
+    for (int i = 0; i < 20; ++i) {
+        std::this_thread::sleep_for(std::chrono::seconds(1));
+
+        //tuna_status status = (i % 2) ? TUNA_UP : TUNA_DOWN;
+        //switch (auto e = tuna_set_status(device, status)) {
+        //  case 0:
+        //    break;
+        //  default:
+        //    std::cerr << "tuna_set_status failed: " << tuna_get_error_name(e) << "\n";
+        //    return EXIT_FAILURE;
+        //}
+        //std::cout << (1 + i) << " status: " << status << std::endl;
+
+        std::cout << (1 + i) << std::endl;
     }
 }
