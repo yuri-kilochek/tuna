@@ -242,7 +242,7 @@ int main() {
     //    }
     //}
 
-    for (int i = 0; i < 20; ++i) {
+    for (int i = 0; i < 10; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         //tuna_status status = (i % 2) ? TUNA_UP : TUNA_DOWN;

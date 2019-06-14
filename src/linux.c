@@ -68,23 +68,6 @@ tuna_translate_syserr(int err) {
 
 static
 tuna_error
-tuna_get_ownership_ioctl(int fd, tuna_ownership *ownership) {
-    struct ifreq ifr;
-    if (ioctl(fd, TUNGETIFF, &ifr) == -1) {
-        return tuna_translate_syserr(errno);
-    }
-
-    if (ifr.ifr_flags & IFF_MULTI_QUEUE) {
-        *ownership = TUNA_SHARED;
-    } else {
-        *ownership = TUNA_EXCLUSIVE;
-    }
-
-    return 0;
-}
-
-static
-tuna_error
 tuna_translate_nlerr(int err) {
     switch (err) {
     case 0:
@@ -141,8 +124,51 @@ out:
 }
 
 static
+tuna_error
+tuna_query_nl_link(int index, nl_recvmsg_msg_cb_t callback, void *context) {
+    struct nl_sock *nl_sock = NULL;
+    struct nl_msg *nl_msg = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_open_nl_sock(&nl_sock))) {
+        goto out;
+    }
+
+    if ((err = nl_socket_modify_cb(nl_sock,
+                                   NL_CB_VALID, NL_CB_CUSTOM,
+                                   callback, context)))
+    {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+    err = 0;
+
+    if ((err = nl_recvmsgs_default(nl_sock))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+out:
+    nlmsg_free(nl_msg);
+    nl_socket_free(nl_sock);
+
+    return err;
+}
+
+static
 int
-tuna_get_ownership_nl_cb(struct nl_msg *nl_msg, void *context) {
+tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
     tuna_ownership *ownership = context;
 
     struct nlattr *linkinfo =
@@ -163,70 +189,22 @@ tuna_get_ownership_nl_cb(struct nl_msg *nl_msg, void *context) {
     return NL_STOP;
 }
 
-static
-tuna_error
-tuna_get_ownership_nl(int index, tuna_ownership *ownership) {
-    struct nl_sock *nl_sock = NULL;
-    struct nl_msg *nl_msg = NULL;
-
-    int err = 0;
-
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
-
-    if ((err = nl_socket_modify_cb(nl_sock,
-                                   NL_CB_VALID, NL_CB_CUSTOM,
-                                   tuna_get_ownership_nl_cb, ownership)))
-    {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-    err = 0;
-
-    if ((err = nl_recvmsgs_default(nl_sock))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-out:
-    nlmsg_free(nl_msg);
-    nl_socket_free(nl_sock);
-
-    return err;
-}
-
 tuna_error
 tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
-    if (device->fd != -1) {
-        return tuna_get_ownership_ioctl(device->fd, ownership);
-    } else {
-        return tuna_get_ownership_nl(device->index, ownership);
+    if (device->fd == -1) {
+        return tuna_query_nl_link(device->index,
+                                  tuna_get_ownership_callback, ownership);
     }
-}
 
-static
-tuna_error
-tuna_get_lifetime_ioctl(int fd, tuna_lifetime *lifetime) {
     struct ifreq ifr;
-    if (ioctl(fd, TUNGETIFF, &ifr) == -1) {
+    if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
         return tuna_translate_syserr(errno);
     }
 
-    if (ifr.ifr_flags & IFF_PERSIST) {
-        *lifetime = TUNA_PERSISTENT;
+    if (ifr.ifr_flags & IFF_MULTI_QUEUE) {
+        *ownership = TUNA_SHARED;
     } else {
-        *lifetime = TUNA_TRANSIENT;
+        *ownership = TUNA_EXCLUSIVE;
     }
 
     return 0;
@@ -234,7 +212,7 @@ tuna_get_lifetime_ioctl(int fd, tuna_lifetime *lifetime) {
 
 static
 int
-tuna_get_lifetime_nl_cb(struct nl_msg *nl_msg, void *context) {
+tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
     tuna_lifetime *lifetime = context;
 
     struct nlattr *linkinfo =
@@ -255,56 +233,25 @@ tuna_get_lifetime_nl_cb(struct nl_msg *nl_msg, void *context) {
     return NL_STOP;
 }
 
-static
-tuna_error
-tuna_get_lifetime_nl(int index, tuna_lifetime *lifetime) {
-    struct nl_sock *nl_sock = NULL;
-    struct nl_msg *nl_msg = NULL;
-
-    int err = 0;
-
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
-
-    if ((err = nl_socket_modify_cb(nl_sock,
-                                   NL_CB_VALID, NL_CB_CUSTOM,
-                                   tuna_get_lifetime_nl_cb, lifetime)))
-    {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-    err = 0;
-
-    if ((err = nl_recvmsgs_default(nl_sock))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-out:
-    nlmsg_free(nl_msg);
-    nl_socket_free(nl_sock);
-
-    return err;
-}
-
 tuna_error
 tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
-    if (device->fd != -1) {
-        return tuna_get_lifetime_ioctl(device->fd, lifetime);
-    } else {
-        return tuna_get_lifetime_nl(device->index, lifetime);
+    if (device->fd == -1) {
+        return tuna_query_nl_link(device->index,
+                                  tuna_get_lifetime_callback, lifetime);
     }
+
+    struct ifreq ifr;
+    if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
+        return tuna_translate_syserr(errno);
+    }
+
+    if (ifr.ifr_flags & IFF_PERSIST) {
+        *lifetime = TUNA_PERSISTENT;
+    } else {
+        *lifetime = TUNA_TRANSIENT;
+    }
+
+    return 0;
 }
 
 tuna_error
