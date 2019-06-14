@@ -192,11 +192,7 @@ tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
         tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
                             TUNA_ARRAY_SIZE(path), path);
 
-    if (nla_get_u8(nlattr)) {
-        *ownership = TUNA_SHARED;
-    } else {
-        *ownership = TUNA_EXCLUSIVE;
-    }
+    *ownership = !!nla_get_u8(nlattr);
 
     return NL_STOP;
 }
@@ -213,11 +209,7 @@ tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
         return tuna_translate_syserr(errno);
     }
 
-    if (ifr.ifr_flags & IFF_MULTI_QUEUE) {
-        *ownership = TUNA_SHARED;
-    } else {
-        *ownership = TUNA_EXCLUSIVE;
-    }
+    *ownership = !!(ifr.ifr_flags & IFF_MULTI_QUEUE);
 
     return 0;
 }
@@ -232,11 +224,7 @@ tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
         tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
                             TUNA_ARRAY_SIZE(path), path);
 
-    if (nla_get_u8(nlattr)) {
-        *lifetime = TUNA_PERSISTENT;
-    } else {
-        *lifetime = TUNA_TRANSIENT;
-    }
+    *lifetime  = !!nla_get_u8(nlattr);
 
     return NL_STOP;
 }
@@ -253,11 +241,7 @@ tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
         return tuna_translate_syserr(errno);
     }
 
-    if (ifr.ifr_flags & IFF_PERSIST) {
-        *lifetime = TUNA_PERSISTENT;
-    } else {
-        *lifetime = TUNA_TRANSIENT;
-    }
+    *lifetime = !!(ifr.ifr_flags & IFF_PERSIST);
 
     return 0;
 }
