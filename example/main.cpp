@@ -62,7 +62,7 @@ int main() {
     std::cout << "attached interface b" << std::flush;
 
     char *name_b;
-    if (auto err = tuna_get_name(device_a, &name_b)) {
+    if (auto err = tuna_get_name(device_b, &name_b)) {
         std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
@@ -70,6 +70,16 @@ int main() {
         tuna_free_name(name_b);
     };
     std::cout << " named " << name_b << std::endl;
+
+    //if (auto err = tuna_set_lifetime(device_b, TUNA_PERSISTENT)) {
+    //    std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //BOOST_SCOPE_EXIT_ALL(&) {
+    //    if (auto err = tuna_set_lifetime(device_b, TUNA_TRANSIENT)) {
+    //        std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+    //    }
+    //};
 
     tuna_device_list *devices;
     if (auto err = tuna_get_device_list(&devices)) {

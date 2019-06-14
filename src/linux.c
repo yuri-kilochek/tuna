@@ -263,6 +263,14 @@ tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
 }
 
 tuna_error
+tuna_set_lifetime(tuna_device *device, tuna_lifetime lifetime) {
+    if (ioctl(device->fd, TUNSETPERSIST, (unsigned long)lifetime) == -1) {
+        return tuna_translate_syserr(errno);
+    }
+    return 0;
+}
+
+tuna_error
 tuna_get_index(tuna_device const *device, int *index) {
     *index = device->index;
     return 0;
