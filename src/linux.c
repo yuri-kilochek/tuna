@@ -167,20 +167,32 @@ out:
 }
 
 static
+struct nlattr *
+tuna_resolve_nlattr(struct nl_msg *nl_msg, int hdrlen, int depth, int *types) {
+    if (depth == 0) { return NULL; }
+    struct nlattr *nlattr = 
+        nlmsg_find_attr(nlmsg_hdr(nl_msg), hdrlen, types[0]);
+    for (int i = 1; nlattr && i < depth; ++i) {
+        nlattr = nla_find(nla_data(nlattr), nla_len(nlattr), types[i]);
+    }
+    return nlattr;
+}
+
+#define TUNA_ARRAY_SIZE(...) \
+    (sizeof(__VA_ARGS__) / sizeof(*(__VA_ARGS__))) \
+/**/
+
+static
 int
 tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
     tuna_ownership *ownership = context;
 
-    struct nlattr *linkinfo =
-        nlmsg_find_attr(nlmsg_hdr(nl_msg), sizeof(struct ifinfomsg),
-                        IFLA_LINKINFO);
-    struct nlattr *info_data =
-        nla_find(nla_data(linkinfo), nla_len(linkinfo), IFLA_INFO_DATA);
-    struct nlattr *tun_multi_queue =
-        nla_find(nla_data(info_data), nla_len(info_data),
-                 IFLA_TUN_MULTI_QUEUE);
+    int path[] = {IFLA_LINKINFO, IFLA_INFO_DATA, IFLA_TUN_MULTI_QUEUE};
+    struct nlattr *nlattr =
+        tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
+                            TUNA_ARRAY_SIZE(path), path);
 
-    if (nla_get_u8(tun_multi_queue)) {
+    if (nla_get_u8(nlattr)) {
         *ownership = TUNA_SHARED;
     } else {
         *ownership = TUNA_EXCLUSIVE;
@@ -215,16 +227,12 @@ int
 tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
     tuna_lifetime *lifetime = context;
 
-    struct nlattr *linkinfo =
-        nlmsg_find_attr(nlmsg_hdr(nl_msg), sizeof(struct ifinfomsg),
-                        IFLA_LINKINFO);
-    struct nlattr *info_data =
-        nla_find(nla_data(linkinfo), nla_len(linkinfo), IFLA_INFO_DATA);
-    struct nlattr *tun_persist =
-        nla_find(nla_data(info_data), nla_len(info_data),
-                 IFLA_TUN_PERSIST);
+    int path[] = {IFLA_LINKINFO, IFLA_INFO_DATA, IFLA_TUN_PERSIST};
+    struct nlattr *nlattr =
+        tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
+                            TUNA_ARRAY_SIZE(path), path);
 
-    if (nla_get_u8(tun_persist)) {
+    if (nla_get_u8(nlattr)) {
         *lifetime = TUNA_PERSISTENT;
     } else {
         *lifetime = TUNA_TRANSIENT;
