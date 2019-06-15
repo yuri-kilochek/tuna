@@ -168,29 +168,24 @@ out:
 
 static
 struct nlattr *
-tuna_resolve_nlattr(struct nl_msg *nl_msg, int hdrlen, int depth, int *types) {
-    if (depth == 0) { return NULL; }
-    struct nlattr *nlattr = 
-        nlmsg_find_attr(nlmsg_hdr(nl_msg), hdrlen, types[0]);
-    for (int i = 1; nlattr && i < depth; ++i) {
-        nlattr = nla_find(nla_data(nlattr), nla_len(nlattr), types[i]);
-    }
-    return nlattr;
+tuna_find_ifinfo_nlattr(struct nl_msg *nl_msg, int type) {
+    return nlmsg_find_attr(nlmsg_hdr(nl_msg), sizeof(struct ifinfomsg), type);
 }
 
-#define TUNA_ARRAY_SIZE(...) \
-    (sizeof(__VA_ARGS__) / sizeof(*(__VA_ARGS__))) \
-/**/
+static
+struct nlattr *
+tuna_nested_find_nlattr(struct nlattr *nlattr, int type) {
+    return nla_find(nla_data(nlattr), nla_len(nlattr), type);
+}
 
 static
 int
 tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
     tuna_ownership *ownership = context;
 
-    int path[] = {IFLA_LINKINFO, IFLA_INFO_DATA, IFLA_TUN_MULTI_QUEUE};
-    struct nlattr *nlattr =
-        tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
-                            TUNA_ARRAY_SIZE(path), path);
+    struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_LINKINFO);
+    nlattr = tuna_nested_find_nlattr(nlattr, IFLA_INFO_DATA);
+    nlattr = tuna_nested_find_nlattr(nlattr, IFLA_TUN_MULTI_QUEUE);
     *ownership = nla_get_u8(nlattr);
 
     return NL_STOP;
@@ -218,10 +213,9 @@ int
 tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
     tuna_lifetime *lifetime = context;
 
-    int path[] = {IFLA_LINKINFO, IFLA_INFO_DATA, IFLA_TUN_PERSIST};
-    struct nlattr *nlattr =
-        tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
-                            TUNA_ARRAY_SIZE(path), path);
+    struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_LINKINFO);
+    nlattr = tuna_nested_find_nlattr(nlattr, IFLA_INFO_DATA);
+    nlattr = tuna_nested_find_nlattr(nlattr, IFLA_TUN_PERSIST);
     *lifetime = nla_get_u8(nlattr);
 
     return NL_STOP;
@@ -324,18 +318,14 @@ tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
     struct ifreq *ifr = context;
 
     {
-        int path[] = {IFLA_IFNAME};
-        struct nlattr *nlattr =
-            tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
-                                TUNA_ARRAY_SIZE(path), path);
+        struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_IFNAME);
         nla_strlcpy(ifr->ifr_name, nlattr, sizeof(ifr->ifr_name));
     }
 
     {
-        int path[] = {IFLA_LINKINFO, IFLA_INFO_DATA, IFLA_TUN_MULTI_QUEUE};
-        struct nlattr *nlattr =
-            tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
-                                TUNA_ARRAY_SIZE(path), path);
+        struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_LINKINFO);
+        nlattr = tuna_nested_find_nlattr(nlattr, IFLA_INFO_DATA);
+        nlattr = tuna_nested_find_nlattr(nlattr, IFLA_TUN_MULTI_QUEUE);
         ifr->ifr_flags = IFF_MULTI_QUEUE & -nla_get_u8(nlattr);
     }
 
