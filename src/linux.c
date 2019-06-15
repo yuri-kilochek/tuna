@@ -34,7 +34,7 @@ tuna_finalize_device(tuna_device *device) {
 }
 
 void
-tuna_close_device(tuna_device *device) {
+tuna_free_device(tuna_device *device) {
     if (device) {
         tuna_finalize_device(device);
 
@@ -191,8 +191,7 @@ tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
     struct nlattr *nlattr =
         tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
                             TUNA_ARRAY_SIZE(path), path);
-
-    *ownership = !!nla_get_u8(nlattr);
+    *ownership = nla_get_u8(nlattr);
 
     return NL_STOP;
 }
@@ -223,8 +222,7 @@ tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
     struct nlattr *nlattr =
         tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
                             TUNA_ARRAY_SIZE(path), path);
-
-    *lifetime  = !!nla_get_u8(nlattr);
+    *lifetime = nla_get_u8(nlattr);
 
     return NL_STOP;
 }
@@ -265,23 +263,6 @@ tuna_free_name(char *name) {
     free(name);
 }
 
-static
-tuna_error
-tuna_get_name_byob(tuna_device const *device, char *name) {
-    if (device->fd != -1) {
-        struct ifreq ifr;
-        if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
-            return tuna_translate_syserr(errno);
-        }
-        strcpy(name, ifr.ifr_name);
-    } else {
-        if (!if_indextoname(device->index, name)) {
-            return tuna_translate_syserr(errno);
-        }
-    }
-    return 0;
-}
-
 tuna_error
 tuna_get_name(tuna_device const *device, char **name_out) {
     char *name = NULL;
@@ -293,8 +274,18 @@ tuna_get_name(tuna_device const *device, char **name_out) {
         goto out;
     }
 
-    if ((err = tuna_get_name_byob(device, name))) {
-        goto out;
+    if (device->fd != -1) {
+        struct ifreq ifr;
+        if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
+            err = tuna_translate_syserr(errno);
+            goto out;
+        }
+        strcpy(name, ifr.ifr_name);
+    } else {
+        if (!if_indextoname(device->index, name)) {
+            err = tuna_translate_syserr(errno);
+            goto out;
+        }
     }
 
     *name_out = name; name = NULL;
@@ -325,6 +316,30 @@ tuna_allocate_device(tuna_device **device_out) {
     *device_out = device;
 
     return 0;
+}
+
+static
+int
+tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
+    struct ifreq *ifr = context;
+
+    {
+        int path[] = {IFLA_IFNAME};
+        struct nlattr *nlattr =
+            tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
+                                TUNA_ARRAY_SIZE(path), path);
+        nla_strlcpy(ifr->ifr_name, nlattr, sizeof(ifr->ifr_name));
+    }
+
+    {
+        int path[] = {IFLA_LINKINFO, IFLA_INFO_DATA, IFLA_TUN_MULTI_QUEUE};
+        struct nlattr *nlattr =
+            tuna_resolve_nlattr(nl_msg, sizeof(struct ifinfomsg),
+                                TUNA_ARRAY_SIZE(path), path);
+        ifr->ifr_flags = IFF_MULTI_QUEUE & -nla_get_u8(nlattr);
+    }
+
+    return NL_STOP;
 }
 
 //static
@@ -384,6 +399,7 @@ tuna_allocate_device(tuna_device **device_out) {
 //    return err;
 //}
 
+static
 tuna_error
 tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
                  tuna_device const *attach_target)
@@ -396,41 +412,70 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
         goto out;
     }
 
-open:
     if ((device->fd = open("/dev/net/tun", O_RDWR)) == -1) {
         err = tuna_translate_syserr(errno);
         goto out;
     }
 
-    struct ifreq ifr = {
-        .ifr_flags = IFF_TUN | IFF_NO_PI,
-    };
-    if (ownership == TUNA_SHARED) {
-        ifr.ifr_flags |= IFF_MULTI_QUEUE;
-    }
+    struct ifreq ifr;
     if (attach_target) {
-        if ((err = tuna_get_name_byob(attach_target, ifr.ifr_name))) {
-            goto out;
+        if (attach_target->fd != -1) {
+            if (ioctl(attach_target->fd, TUNGETIFF, &ifr) == -1) {
+                err = tuna_translate_syserr(errno);
+                goto out;
+            }
+            ifr.ifr_flags &= IFF_MULTI_QUEUE;
+        } else {
+            if ((err = tuna_query_nl_link(attach_target->index,
+                                          tuna_open_device_callback, &ifr)))
+            { goto out; }
         }
+        ifr.ifr_flags |= IFF_TUN | IFF_NO_PI;
+    } else {
+        *ifr.ifr_name = '\0';
+        ifr.ifr_flags = IFF_TUN | IFF_NO_PI | (IFF_MULTI_QUEUE & -ownership);
     }
     if (ioctl(device->fd, TUNSETIFF, &ifr) == -1) {
-        if (errno == EINVAL) { // IFF_MULTI_QUEUE flag mismatch
-            err = TUNA_DEVICE_BUSY; // TODO: maybe replace with special error
-        } else {
-            err = tuna_translate_syserr(errno);
+        err = tuna_translate_syserr(errno);
+        goto out;
+    }
+
+    // XXX: Since we only get the interface's name that can be changed by any
+    // priviledged process and there appears to be no TUNGETIFINDEX or other
+    // machanism to obtain interface index directly from file destriptor,
+    // here we have a potential race condition.
+get_index:
+    if (!(device->index = if_nametoindex(ifr.ifr_name))) {
+        // XXX: The following handles the case when it's just this interface
+        // that has been renamed, however if the freed name has then been
+        // assigned to another interface, then we'll incorrectly get that
+        // interface's index and no error. We can then attempt to refetch the
+        // name via TUNGETIFF and check if they match, however it is possible
+        // that before we can do that, our interface is renamed back to its
+        // original name, causing the check to incorrectly succeed. Since there
+        // appears to be no way to completely rule out a race, we content
+        // ourselves with only handling the basic case, judging the rest
+        // extremely unlikely to ever happen.
+        if (errno == ENODEV) {
+            if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
+                err = tuna_translate_syserr(errno);
+                goto out;
+            }
+            goto get_index;
         }
+        err = tuna_translate_syserr(errno);
         goto out;
     }
 
     if (attach_target) {
-        device->index = attach_target->index;
-    } else {
-        if (!(device->index = if_nametoindex(ifr.ifr_name))) {
-            if (errno == ENODEV) {
-                close(device->fd); device->fd = -1;
-                goto open;
-            }
-            err = tuna_translate_syserr(errno);
+        // Event assuming the interface's index has been determined correctly,
+        // if the attach target interface has been deleted or renamed just
+        // before TUNSETIFF, then TUNSETIFF will succeed and create a new
+        // interface instead of attaching to an existing one. At least we can
+        // detect this afterwards, since the new interface will have a
+        // different index.
+        if (device->index != attach_target->index) {
+            err = TUNA_DEVICE_LOST;
             goto out;
         }
     }
@@ -440,9 +485,19 @@ open:
     *device_out = device; device = NULL;
 
 out:
-    tuna_close_device(device);
+    tuna_free_device(device);
 
     return err;
+}
+
+tuna_error
+tuna_create_device(tuna_device **device, tuna_ownership ownership) {
+    return tuna_open_device(device, ownership, NULL);
+}
+
+tuna_error
+tuna_attach_device(tuna_device **device, tuna_device const *target) {
+    return tuna_open_device(device, /*ignored*/0, target);
 }
 
 struct tuna_device_list {

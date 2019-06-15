@@ -25,12 +25,12 @@ int main() {
     }
 
     tuna_device *device_a;
-    if (auto err = tuna_open_device(&device_a, TUNA_SHARED, NULL)) {
+    if (auto err = tuna_create_device(&device_a, TUNA_EXCLUSIVE)) {
         std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
     BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_close_device(device_a);
+        tuna_free_device(device_a);
     };
     std::cout << "created interface a" << std::flush;
 
@@ -44,42 +44,32 @@ int main() {
     };
     std::cout << " named " << name_a << std::endl;
 
-    tuna_ownership ownership;
-    if (auto err = tuna_get_ownership(device_a, &ownership)) {
-        std::cerr << "tuna_get_ownership failed: " << tuna_get_error_name(err) << "\n";
+    if (auto err = tuna_set_lifetime(device_a, TUNA_PERSISTENT)) {
+        std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
-    std::cout << "ownership: " << (ownership ? "shared" : "exclusive") << std::endl;
+    std::cout << "made " << name_a << " persistent\n";
+    tuna_free_device(device_a); device_a = NULL;
 
-    tuna_device *device_b;
-    if (auto err = tuna_open_device(&device_b, TUNA_SHARED, device_a)) {
-        std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
-        return EXIT_FAILURE;
-    }
-    BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_close_device(device_b);
-    };
-    std::cout << "attached interface b" << std::flush;
-
-    char *name_b;
-    if (auto err = tuna_get_name(device_b, &name_b)) {
-        std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
-        return EXIT_FAILURE;
-    }
-    BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_free_name(name_b);
-    };
-    std::cout << " named " << name_b << std::endl;
-
-    //if (auto err = tuna_set_lifetime(device_b, TUNA_PERSISTENT)) {
-    //    std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+    //tuna_device *device_b;
+    //if (auto err = tuna_attach_device(&device_b, device_a)) {
+    //    std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
     //    return EXIT_FAILURE;
     //}
     //BOOST_SCOPE_EXIT_ALL(&) {
-    //    if (auto err = tuna_set_lifetime(device_b, TUNA_TRANSIENT)) {
-    //        std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
-    //    }
+    //    tuna_free_device(device_b);
     //};
+    //std::cout << "attached interface b" << std::flush;
+
+    //char *name_b;
+    //if (auto err = tuna_get_name(device_b, &name_b)) {
+    //    std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //BOOST_SCOPE_EXIT_ALL(&) {
+    //    tuna_free_name(name_b);
+    //};
+    //std::cout << " named " << name_b << std::endl;
 
     tuna_device_list *devices;
     if (auto err = tuna_get_device_list(&devices)) {
@@ -122,6 +112,24 @@ int main() {
             return EXIT_FAILURE;
         }
         std::cout << "    lifetime: " << (lifetime ? "persistent" : "transient") << "\n";
+
+        if (!strcmp(name, name_a)) {
+            tuna_device *device_x;
+            if (auto err = tuna_attach_device(&device_x, device)) {
+                std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
+                return EXIT_FAILURE;
+            }
+            BOOST_SCOPE_EXIT_ALL(&) {
+                tuna_free_device(device_x);
+            };
+            std::cout << "attached interface x named " << name << "\n";
+
+            if (auto err = tuna_set_lifetime(device_x, TUNA_TRANSIENT)) {
+                std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+                return EXIT_FAILURE;
+            }
+            std::cout << "made " << name << " transient\n";
+        }
     }
     std::cout << std::flush;
 
