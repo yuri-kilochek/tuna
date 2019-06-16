@@ -523,7 +523,7 @@ get_index:
     }
 
     if (attach_target) {
-        // Event assuming the interface's index has been determined correctly,
+        // Even assuming the interface's index has been determined correctly,
         // if the attach target interface has been deleted or renamed just
         // before TUNSETIFF, then TUNSETIFF will succeed and create a new
         // interface instead of attaching to an existing one. At least we can
@@ -552,7 +552,7 @@ tuna_create_device(tuna_device **device, tuna_ownership ownership) {
 
 tuna_error
 tuna_attach_device(tuna_device **device, tuna_device const *target) {
-    return tuna_open_device(device, /*ignored*/0, target);
+    return tuna_open_device(device, (tuna_ownership)0, target);
 }
 
 struct tuna_device_list {
