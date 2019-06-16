@@ -79,7 +79,7 @@ typedef uint_fast8_t tuna_error;
 #define TUNA_MTU_TOO_BIG      UINT8_C(11)
 
 TUNA_PRIV_API
-char const*
+char const *
 tuna_get_error_name(tuna_error error);
 
 ///////////////////////////////////////////////////////////////////////////////

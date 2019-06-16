@@ -44,12 +44,19 @@ int main() {
     };
     std::cout << " named " << name_a << std::endl;
 
-    if (auto err = tuna_set_lifetime(device_a, TUNA_PERSISTENT)) {
+    //if (auto err = tuna_set_lifetime(device_a, TUNA_PERSISTENT)) {
+    //    std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //std::cout << "made " << name_a << " persistent\n";
+    //tuna_free_device(device_a); device_a = NULL;
+
+    char new_name[] = "footun";
+    if (auto err = tuna_set_name(device_a, new_name)) {
         std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
-    std::cout << "made " << name_a << " persistent\n";
-    tuna_free_device(device_a); device_a = NULL;
+    std::cout << " renamed to " << new_name << std::endl;
 
     //tuna_device *device_b;
     //if (auto err = tuna_attach_device(&device_b, device_a)) {
@@ -113,23 +120,23 @@ int main() {
         }
         std::cout << "    lifetime: " << (lifetime ? "persistent" : "transient") << "\n";
 
-        if (!strcmp(name, name_a)) {
-            tuna_device *device_x;
-            if (auto err = tuna_attach_device(&device_x, device)) {
-                std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
-                return EXIT_FAILURE;
-            }
-            BOOST_SCOPE_EXIT_ALL(&) {
-                tuna_free_device(device_x);
-            };
-            std::cout << "attached interface x named " << name << "\n";
+        //if (!strcmp(name, name_a)) {
+        //    tuna_device *device_x;
+        //    if (auto err = tuna_attach_device(&device_x, device)) {
+        //        std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
+        //        return EXIT_FAILURE;
+        //    }
+        //    BOOST_SCOPE_EXIT_ALL(&) {
+        //        tuna_free_device(device_x);
+        //    };
+        //    std::cout << "attached interface x named " << name << "\n";
 
-            if (auto err = tuna_set_lifetime(device_x, TUNA_TRANSIENT)) {
-                std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
-                return EXIT_FAILURE;
-            }
-            std::cout << "made " << name << " transient\n";
-        }
+        //    if (auto err = tuna_set_lifetime(device_x, TUNA_TRANSIENT)) {
+        //        std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+        //        return EXIT_FAILURE;
+        //    }
+        //    std::cout << "made " << name << " transient\n";
+        //}
     }
     std::cout << std::flush;
 
