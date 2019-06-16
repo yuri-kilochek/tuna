@@ -355,6 +355,11 @@ out:
     return err;
 }
 
+tuna_io_handle 
+tuna_get_io_handle(tuna_device *device) {
+    return device->fd;
+}
+
 static
 void
 tuna_initialize_device(tuna_device *device) {
@@ -661,11 +666,6 @@ out:
 
 
 
-//tuna_io_handle 
-//tuna_get_io_handle(tuna_device const *dev) {
-//    return dev->fd;
-//}
-//
 //tuna_error
 //tuna_get_status(tuna_device const *dev, tuna_status *status) {
 //    struct rtnl_link *rtnl_link = NULL;
