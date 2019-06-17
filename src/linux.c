@@ -93,26 +93,12 @@ tuna_open_nl_sock(struct nl_sock **nl_sock_out) {
 
     int err = 0;
 
-    errno = 0;
     if (!(nl_sock = nl_socket_alloc())) {
-        if (errno) {
-            err = tuna_translate_syserr(errno);
-        } else {
-            err = TUNA_OUT_OF_MEMORY;
-        }
+        err = TUNA_OUT_OF_MEMORY;
         goto out;
     }
 
-    errno = 0;
     if ((err = nl_connect(nl_sock, NETLINK_ROUTE))) {
-        if (err == -NLE_FAILURE) {
-            switch (errno) {
-            case EMFILE:
-            case ENFILE:
-                err = TUNA_TOO_MANY_HANDLES;
-                goto out;
-            }
-        }
         err = tuna_translate_nlerr(-err);
         goto out;
     }
@@ -154,7 +140,6 @@ tuna_query_nl_link(int index, nl_recvmsg_msg_cb_t callback, void *context) {
         err = tuna_translate_nlerr(-err);
         goto out;
     }
-    err = 0;
 
     if ((err = nl_recvmsgs_default(nl_sock))) {
         err = tuna_translate_nlerr(-err);
@@ -195,19 +180,8 @@ tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
 
 tuna_error
 tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
-    if (device->fd == -1) {
-        return tuna_query_nl_link(device->index,
-                                  tuna_get_ownership_callback, ownership);
-    }
-
-    struct ifreq ifr;
-    if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
-        return tuna_translate_syserr(errno);
-    }
-
-    *ownership = !!(ifr.ifr_flags & IFF_MULTI_QUEUE);
-
-    return 0;
+    return tuna_query_nl_link(device->index,
+                              tuna_get_ownership_callback, ownership);
 }
 
 static
@@ -225,19 +199,8 @@ tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
 
 tuna_error
 tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
-    if (device->fd == -1) {
-        return tuna_query_nl_link(device->index,
-                                  tuna_get_lifetime_callback, lifetime);
-    }
-
-    struct ifreq ifr;
-    if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
-        return tuna_translate_syserr(errno);
-    }
-
-    *lifetime = !!(ifr.ifr_flags & IFF_PERSIST);
-
-    return 0;
+    return tuna_query_nl_link(device->index,
+                              tuna_get_lifetime_callback, lifetime);
 }
 
 tuna_error
@@ -265,23 +228,14 @@ tuna_get_name(tuna_device const *device, char **name_out) {
 
     int err = 0;
 
-    if (!(name = malloc(IFNAMSIZ))) {
+    if (!(name = malloc(IF_NAMESIZE))) {
         err = tuna_translate_syserr(errno);
         goto out;
     }
 
-    if (device->fd != -1) {
-        struct ifreq ifr;
-        if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
-            err = tuna_translate_syserr(errno);
-            goto out;
-        }
-        strcpy(name, ifr.ifr_name);
-    } else {
-        if (!if_indextoname(device->index, name)) {
-            err = tuna_translate_syserr(errno);
-            goto out;
-        }
+    if (!if_indextoname(device->index, name)) {
+        err = tuna_translate_syserr(errno);
+        goto out;
     }
 
     *name_out = name; name = NULL;
@@ -305,7 +259,7 @@ tuna_set_name(tuna_device *device, char const *name) {
         err = TUNA_INVALID_NAME;
         goto out;
     }
-    if (name_len >= IFNAMSIZ) {
+    if (name_len >= IF_NAMESIZE) {
         err = TUNA_NAME_TOO_LONG;
         goto out;
     }
@@ -321,13 +275,8 @@ tuna_set_name(tuna_device *device, char const *name) {
         goto out;
     }
 
-    errno = 0;
     if (!(rtnl_link_patch = rtnl_link_alloc())) {
-        if (errno) {
-            err = tuna_translate_syserr(errno);
-        } else {
-            err = TUNA_OUT_OF_MEMORY;
-        }
+        err = TUNA_OUT_OF_MEMORY;
         goto out;
     }
 
@@ -396,7 +345,7 @@ tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
         struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_LINKINFO);
         nlattr = tuna_nested_find_nlattr(nlattr, IFLA_INFO_DATA);
         nlattr = tuna_nested_find_nlattr(nlattr, IFLA_TUN_MULTI_QUEUE);
-        ifr->ifr_flags = IFF_MULTI_QUEUE & -nla_get_u8(nlattr);
+        ifr->ifr_flags |= IFF_MULTI_QUEUE & -nla_get_u8(nlattr);
     }
 
     return NL_STOP;
@@ -477,23 +426,15 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
         goto out;
     }
 
-    struct ifreq ifr;
+    struct ifreq ifr = {
+        .ifr_flags = IFF_TUN | IFF_NO_PI,
+    };
     if (attach_target) {
-        if (attach_target->fd != -1) {
-            if (ioctl(attach_target->fd, TUNGETIFF, &ifr) == -1) {
-                err = tuna_translate_syserr(errno);
-                goto out;
-            }
-            ifr.ifr_flags &= IFF_MULTI_QUEUE;
-        } else {
-            if ((err = tuna_query_nl_link(attach_target->index,
-                                          tuna_open_device_callback, &ifr)))
-            { goto out; }
-        }
-        ifr.ifr_flags |= IFF_TUN | IFF_NO_PI;
+        if ((err = tuna_query_nl_link(attach_target->index,
+                                      tuna_open_device_callback, &ifr)))
+        { goto out; }
     } else {
-        *ifr.ifr_name = '\0';
-        ifr.ifr_flags = IFF_TUN | IFF_NO_PI | (IFF_MULTI_QUEUE & -ownership);
+        ifr.ifr_flags |= IFF_MULTI_QUEUE & -ownership;
     }
     if (ioctl(device->fd, TUNSETIFF, &ifr) == -1) {
         err = tuna_translate_syserr(errno);
