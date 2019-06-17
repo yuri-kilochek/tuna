@@ -51,9 +51,14 @@ int main() {
     //std::cout << "made " << name_a << " persistent\n";
     //tuna_free_device(device_a); device_a = NULL;
 
+    if (auto err = tuna_set_status(device_a, TUNA_DISCONNECTED)) {
+        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(err) << "\n";
+        return EXIT_FAILURE;
+    }
+
     char new_name[] = "footun";
     if (auto err = tuna_set_name(device_a, new_name)) {
-        std::cerr << "tuna_set_lifetime failed: " << tuna_get_error_name(err) << "\n";
+        std::cerr << "tuna_set_name failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
     std::cout << " renamed to " << new_name << std::endl;
@@ -119,6 +124,13 @@ int main() {
             return EXIT_FAILURE;
         }
         std::cout << "    lifetime: " << (lifetime ? "persistent" : "transient") << "\n";
+
+        tuna_status status;
+        if (auto err = tuna_get_status(device, &status)) {
+            std::cerr << "tuna_get_status failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
+        std::cout << "    status: " << (status ? "connected" : "disconnected") << "\n";
 
         //if (!strcmp(name, name_a)) {
         //    tuna_device *device_x;
@@ -267,7 +279,7 @@ int main() {
     //    }
     //}
 
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 100; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         //tuna_status status = (i % 2) ? TUNA_UP : TUNA_DOWN;
