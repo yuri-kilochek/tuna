@@ -44,30 +44,6 @@ tuna_free_device(tuna_device *device) {
 
 static
 tuna_error
-tuna_translate_syserr(int err) {
-    switch (err) {
-    case 0:
-        return 0;
-    case EPERM:
-        return TUNA_FORBIDDEN;
-    case ENOMEM:
-    case ENOBUFS:
-        return TUNA_OUT_OF_MEMORY;
-    case EMFILE:
-    case ENFILE:
-        return TUNA_TOO_MANY_HANDLES;
-    case ENXIO:
-    case ENODEV:
-        return TUNA_DEVICE_LOST;
-    case EBUSY:
-        return TUNA_DEVICE_BUSY;
-    default:
-        return TUNA_UNEXPECTED;
-    }
-}
-
-static
-tuna_error
 tuna_translate_nlerr(int err) {
     switch (err) {
     case 0:
@@ -84,6 +60,50 @@ tuna_translate_nlerr(int err) {
     default:
         return TUNA_UNEXPECTED;
     }
+}
+
+static
+tuna_error
+tuna_get_raw_rtnl_link_via(struct nl_sock *nl_sock, int index,
+                           nl_recvmsg_msg_cb_t callback, void *context)
+{
+    struct nl_cb *nl_cb = NULL;
+    struct nl_msg *nl_msg = NULL;
+
+    int err = 0;
+
+    if (!(nl_cb = nl_cb_alloc(NL_CB_CUSTOM))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    if ((err = nl_cb_set(nl_cb, NL_CB_VALID, NL_CB_CUSTOM,
+                         callback, context)))
+    {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    if ((err = nl_recvmsgs(nl_sock, nl_cb))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+out:
+    nlmsg_free(nl_msg);
+    nl_cb_put(nl_cb);
+
+    return err;
 }
 
 static
@@ -117,7 +137,6 @@ tuna_get_raw_rtnl_link(int index,
                        nl_recvmsg_msg_cb_t callback, void *context)
 {
     struct nl_sock *nl_sock = NULL;
-    struct nl_msg *nl_msg = NULL;
 
     int err = 0;
 
@@ -125,31 +144,11 @@ tuna_get_raw_rtnl_link(int index,
         goto out;
     }
 
-    if ((err = nl_socket_modify_cb(nl_sock,
-                                   NL_CB_VALID, NL_CB_CUSTOM,
-                                   callback, context)))
-    {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_recvmsgs_default(nl_sock))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
+    if ((err = tuna_get_raw_rtnl_link_via(nl_sock, index,
+                                          callback, context)))
+    { goto out; }
 
 out:
-    nlmsg_free(nl_msg);
     nl_socket_free(nl_sock);
 
     return err;
@@ -205,6 +204,30 @@ tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
                                   tuna_get_lifetime_callback, lifetime);
 }
 
+static
+tuna_error
+tuna_translate_syserr(int err) {
+    switch (err) {
+    case 0:
+        return 0;
+    case EPERM:
+        return TUNA_FORBIDDEN;
+    case ENOMEM:
+    case ENOBUFS:
+        return TUNA_OUT_OF_MEMORY;
+    case EMFILE:
+    case ENFILE:
+        return TUNA_TOO_MANY_HANDLES;
+    case ENXIO:
+    case ENODEV:
+        return TUNA_DEVICE_LOST;
+    case EBUSY:
+        return TUNA_DEVICE_BUSY;
+    default:
+        return TUNA_UNEXPECTED;
+    }
+}
+
 tuna_error
 tuna_set_lifetime(tuna_device *device, tuna_lifetime lifetime) {
     if (ioctl(device->fd, TUNSETPERSIST, (unsigned long)lifetime) == -1) {
@@ -250,10 +273,10 @@ out:
 
 static
 tuna_error
-tuna_change_rtnl_link_flags(struct nl_sock *nl_sock, int index, 
-                            void (*change)(struct rtnl_link *rtnl_link,
-                                           unsigned flags),
-                            unsigned flags)
+tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index, 
+                                void (*change)(struct rtnl_link *rtnl_link,
+                                               unsigned flags),
+                                unsigned flags)
 {
     struct rtnl_link *rtnl_link = NULL;
     struct rtnl_link *rtnl_link_patch = NULL;
@@ -305,8 +328,8 @@ tuna_set_name(tuna_device *device, char const *name) {
         goto out;
     }
 
-    if ((err = tuna_change_rtnl_link_flags(nl_sock, device->index,
-                                           rtnl_link_unset_flags, IFF_UP)))
+    if ((err = tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                               rtnl_link_unset_flags, IFF_UP)))
     { goto out; }
 
     if ((err = rtnl_link_get_kernel(nl_sock,
@@ -337,14 +360,16 @@ tuna_set_name(tuna_device *device, char const *name) {
     }
 
 out:
-    if (tuna_change_rtnl_link_flags(nl_sock, device->index,
-                                    rtnl_link_set_flags, IFF_UP))
+    rtnl_link_put(rtnl_link_patch);
+    rtnl_link_put(rtnl_link);
+
+    if (tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                        rtnl_link_set_flags, IFF_UP))
     {
         err = TUNA_DEVICE_LOST;
         close(device->fd); device->fd = -1;
     }
-    rtnl_link_put(rtnl_link_patch);
-    rtnl_link_put(rtnl_link);
+
     nl_socket_free(nl_sock);
 
     return err;
@@ -378,52 +403,6 @@ tuna_get_status(tuna_device const *device, tuna_status *status) {
     }
 
 out:
-    rtnl_link_put(rtnl_link);
-    nl_socket_free(nl_sock);
-
-    return err;
-}
-
-// 
-//
-// TODO: remove this and replace the call in tuna_open_device with
-// tuna_change_rtnl_link_flags, while also factoring out a version of
-// tuna_get_raw_rtnl_link that uses a given socket, sharing a socket among them
-// in tuna_open_device, possibly also querying the index via netlink.
-//
-//
-static
-tuna_error
-tuna_bring_interface_up(int index) {
-    struct nl_sock *nl_sock = NULL;
-    struct rtnl_link *rtnl_link = NULL;
-    struct rtnl_link *rtnl_link_patch = NULL;
-
-    int err = 0;
-
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
-
-    if ((err = rtnl_link_get_kernel(nl_sock, index, NULL, &rtnl_link))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if (!(rtnl_link_patch = rtnl_link_alloc())) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-
-    rtnl_link_set_flags(rtnl_link_patch, IFF_UP);
-
-    if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-out:
-    rtnl_link_put(rtnl_link_patch);
     rtnl_link_put(rtnl_link);
     nl_socket_free(nl_sock);
 
@@ -548,6 +527,7 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
                  tuna_device const *attach_target)
 {
     tuna_device *device = NULL;
+    struct nl_sock *nl_sock = NULL;
 
     int err = 0;
 
@@ -560,12 +540,17 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
         goto out;
     }
 
+    if ((err = tuna_open_nl_sock(&nl_sock))) {
+        goto out;
+    }
+
     struct ifreq ifr = {
         .ifr_flags = IFF_TUN | IFF_NO_PI,
     };
     if (attach_target) {
-        if ((err = tuna_get_raw_rtnl_link(attach_target->index,
-                                          tuna_open_device_callback, &ifr)))
+        if ((err = tuna_get_raw_rtnl_link_via(nl_sock, attach_target->index,
+                                              tuna_open_device_callback,
+                                              &ifr)))
         { goto out; }
     } else {
         ifr.ifr_flags |= IFF_MULTI_QUEUE & -ownership;
@@ -580,7 +565,7 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
     // machanism to obtain interface index directly from file destriptor,
     // here we have a potential race condition.
 get_index:
-    if (!(device->index = if_nametoindex(ifr.ifr_name))) {
+    if (ioctl(nl_socket_get_fd(nl_sock), SIOCGIFINDEX, &ifr) == -1) {
         // XXX: The following handles the case when it's just this interface
         // that has been renamed, however if the freed name has then been
         // assigned to another interface, then we'll incorrectly get that
@@ -601,6 +586,7 @@ get_index:
         err = tuna_translate_syserr(errno);
         goto out;
     }
+    device->index = ifr.ifr_ifindex;
 
     if (attach_target) {
         // Even assuming the interface's index has been determined correctly,
@@ -615,15 +601,16 @@ get_index:
         }
     }
 
-    if ((err = tuna_bring_interface_up(device->index))) {
-        goto out;
-    }
+    if ((err = tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                               rtnl_link_set_flags, IFF_UP)))
+    { goto out; }
 
     //if ((err = tuna_disable_default_local_ip6_addr(device))) { goto out; }
 
     *device_out = device; device = NULL;
 
 out:
+    nl_socket_free(nl_sock);
     tuna_free_device(device);
 
     return err;
