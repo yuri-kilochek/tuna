@@ -276,7 +276,7 @@ tuna_error
 tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index, 
                                 void (*change)(struct rtnl_link *rtnl_link,
                                                unsigned flags),
-                                unsigned flags)
+                                unsigned flags, unsigned *old_flags)
 {
     struct rtnl_link *rtnl_link = NULL;
     struct rtnl_link *rtnl_link_patch = NULL;
@@ -287,6 +287,7 @@ tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index,
         err = tuna_translate_nlerr(-err);
         goto out;
     }
+
     if (!(rtnl_link_patch = rtnl_link_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
         goto out;
@@ -297,6 +298,10 @@ tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index,
     if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
         err = tuna_translate_nlerr(-err);
         goto out;
+    }
+
+    if (old_flags) {
+        *old_flags = rtnl_link_get_flags(rtnl_link) & flags;
     }
 
 out:
@@ -311,6 +316,7 @@ tuna_set_name(tuna_device *device, char const *name) {
     struct nl_sock *nl_sock = NULL;
     struct rtnl_link *rtnl_link = NULL;
     struct rtnl_link *rtnl_link_patch = NULL;
+    unsigned flags = 0;
 
     int err = 0;
 
@@ -329,7 +335,8 @@ tuna_set_name(tuna_device *device, char const *name) {
     }
 
     if ((err = tuna_change_rtnl_link_flags_via(nl_sock, device->index,
-                                               rtnl_link_unset_flags, IFF_UP)))
+                                               rtnl_link_unset_flags,
+                                               IFF_UP, &flags)))
     { goto out; }
 
     if ((err = rtnl_link_get_kernel(nl_sock,
@@ -363,8 +370,9 @@ out:
     rtnl_link_put(rtnl_link_patch);
     rtnl_link_put(rtnl_link);
 
-    if (tuna_change_rtnl_link_flags_via(nl_sock, device->index,
-                                        rtnl_link_set_flags, IFF_UP))
+    if (flags && tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                                 rtnl_link_set_flags,
+                                                 flags, NULL))
     {
         err = TUNA_DEVICE_LOST;
         close(device->fd); device->fd = -1;
@@ -602,7 +610,8 @@ get_index:
     }
 
     if ((err = tuna_change_rtnl_link_flags_via(nl_sock, device->index,
-                                               rtnl_link_set_flags, IFF_UP)))
+                                               rtnl_link_set_flags,
+                                               IFF_UP, NULL)))
     { goto out; }
 
     //if ((err = tuna_disable_default_local_ip6_addr(device))) { goto out; }
