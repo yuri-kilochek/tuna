@@ -51,10 +51,10 @@ int main() {
     //std::cout << "made " << name_a << " persistent\n";
     //tuna_free_device(device_a); device_a = NULL;
 
-    if (auto err = tuna_set_status(device_a, TUNA_DISCONNECTED)) {
-        std::cerr << "tuna_set_status failed: " << tuna_get_error_name(err) << "\n";
-        return EXIT_FAILURE;
-    }
+    //if (auto err = tuna_set_status(device_a, TUNA_DISCONNECTED)) {
+    //    std::cerr << "tuna_set_status failed: " << tuna_get_error_name(err) << "\n";
+    //    return EXIT_FAILURE;
+    //}
 
     char new_name[] = "footun";
     if (auto err = tuna_set_name(device_a, new_name)) {
@@ -62,6 +62,11 @@ int main() {
         return EXIT_FAILURE;
     }
     std::cout << " renamed to " << new_name << std::endl;
+
+    if (auto err = tuna_set_mtu(device_a, 2000)) {
+        std::cerr << "tuna_set_mtu failed: " << tuna_get_error_name(err) << "\n";
+        return EXIT_FAILURE;
+    }
 
     //tuna_device *device_b;
     //if (auto err = tuna_attach_device(&device_b, device_a)) {
@@ -131,6 +136,13 @@ int main() {
             return EXIT_FAILURE;
         }
         std::cout << "    status: " << (status ? "connected" : "disconnected") << "\n";
+
+        size_t mtu;
+        if (auto err = tuna_get_mtu(device, &mtu)) {
+            std::cerr << "tuna_get_mtu failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
+        std::cout << "    mtu: " << mtu << "\n";
 
         //if (!strcmp(name, name_a)) {
         //    tuna_device *device_x;
