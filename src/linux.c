@@ -283,6 +283,9 @@ tuna_bring_up_via(struct nl_sock *nl_sock, int index) {
         err = tuna_translate_nlerr(-err);
         goto out;
     }
+    if (rtnl_link_get_flags(rtnl_link) & IFF_UP) {
+        goto out;
+    }
 
     if (!(rtnl_link_patch = rtnl_link_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
@@ -331,7 +334,7 @@ tuna_set_name(tuna_device *device, char const *name) {
         err = tuna_translate_nlerr(-err);
         goto out;
     }
-    if (!strcmp(name, rtnl_link_get_name(rtnl_link))) {
+    if (!strcmp(rtnl_link_get_name(rtnl_link), name)) {
         goto out;
     }
 
@@ -357,7 +360,7 @@ tuna_set_name(tuna_device *device, char const *name) {
             err = tuna_translate_nlerr(-err);
             goto out;
         }
-        if (!strcmp(name, rtnl_link_get_name(rtnl_link))) {
+        if (!strcmp(rtnl_link_get_name(rtnl_link), name)) {
             goto out;
         }
     }
@@ -458,12 +461,14 @@ tuna_set_mtu(tuna_device *device, size_t mtu) {
         err = tuna_translate_nlerr(-err);
         goto out;
     }
+    if (rtnl_link_get_mtu(rtnl_link) == mtu) {
+        goto out;
+    }
 
     if (!(rtnl_link_patch = rtnl_link_alloc())) {
         err = TUNA_OUT_OF_MEMORY;
         goto out;
     }
-
     rtnl_link_set_mtu(rtnl_link_patch, mtu);
 
     if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
