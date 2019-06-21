@@ -77,24 +77,11 @@ tuna_get_raw_rtnl_link_via(struct nl_sock *nl_sock, int index,
         goto out;
     }
 
-    if ((err = nl_cb_set(nl_cb, NL_CB_VALID, NL_CB_CUSTOM,
-                         callback, context)))
+    if ((err = nl_cb_set(nl_cb, NL_CB_VALID, NL_CB_CUSTOM, callback, context))
+     || (err = rtnl_link_build_get_request(index, NULL, &nl_msg))
+     || (err = nl_send_auto(nl_sock, nl_msg)) < 0
+     || (err = nl_recvmsgs(nl_sock, nl_cb)))
     {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = rtnl_link_build_get_request(index, NULL, &nl_msg))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_send_auto(nl_sock, nl_msg)) < 0) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-
-    if ((err = nl_recvmsgs(nl_sock, nl_cb))) {
         err = tuna_translate_nlerr(-err);
         goto out;
     }
@@ -140,12 +127,8 @@ tuna_get_raw_rtnl_link(int index,
 
     int err = 0;
 
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
-
-    if ((err = tuna_get_raw_rtnl_link_via(nl_sock, index,
-                                          callback, context)))
+    if ((err = tuna_open_nl_sock(&nl_sock)) ||
+        (err = tuna_get_raw_rtnl_link_via(nl_sock, index, callback, context)))
     { goto out; }
 
 out:
@@ -253,12 +236,9 @@ tuna_get_name(tuna_device const *device, char **name_out) {
 
     int err = 0;
 
-    if (!(name = malloc(IF_NAMESIZE))) {
-        err = tuna_translate_syserr(errno);
-        goto out;
-    }
-
-    if (!if_indextoname(device->index, name)) {
+    if (!(name = malloc(IF_NAMESIZE))
+     || !if_indextoname(device->index, name))
+    {
         err = tuna_translate_syserr(errno);
         goto out;
     }
@@ -273,33 +253,58 @@ out:
 
 static
 tuna_error
-tuna_bring_up_via(struct nl_sock *nl_sock, int index) {
+tuna_get_rtnl_link_via(struct nl_sock *nl_sock, int index,
+                       struct rtnl_link **rtnl_link_out)
+{
+    int err = rtnl_link_get_kernel(nl_sock, index, NULL, rtnl_link_out);
+    if (err) { return tuna_translate_nlerr(-err); }
+    return 0;
+}
+
+static
+tuna_error
+tuna_allocate_rtnl_link(struct rtnl_link **rtnl_link_out) {
+    struct rtnl_link *rtnl_link = rtnl_link_alloc();
+    if (!rtnl_link) { return TUNA_OUT_OF_MEMORY; }
+    *rtnl_link_out = rtnl_link;
+    return 0;
+}
+
+static
+tuna_error
+tuna_change_rtnl_link_via(struct nl_sock *nl_sock,
+                          struct rtnl_link *rtnl_link,
+                          struct rtnl_link *rtnl_link_changes)
+{
+    int err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_changes, 0);
+    if (err) { return tuna_translate_nlerr(-err); }
+    return 0;
+}
+
+static
+tuna_error
+tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index,
+                                void (*change)(struct rtnl_link *, unsigned),
+                                unsigned flags, unsigned *old_flags_out)
+{
     struct rtnl_link *rtnl_link = NULL;
-    struct rtnl_link *rtnl_link_patch = NULL;
+    struct rtnl_link *rtnl_link_changes = NULL;
 
     int err = 0;
 
-    if ((err = rtnl_link_get_kernel(nl_sock, index, NULL, &rtnl_link))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-    if (rtnl_link_get_flags(rtnl_link) & IFF_UP) {
-        goto out;
-    }
+    if ((err = tuna_get_rtnl_link_via(nl_sock, index, &rtnl_link))
+     || (err = tuna_allocate_rtnl_link(&rtnl_link_changes))
+     || (change(rtnl_link_changes, flags), 0)
+     || (err = tuna_change_rtnl_link_via(nl_sock,
+                                         rtnl_link, rtnl_link_changes)))
+    { goto out; }
 
-    if (!(rtnl_link_patch = rtnl_link_alloc())) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-    rtnl_link_set_flags(rtnl_link_patch, IFF_UP);
-
-    if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
+    if (old_flags_out) {
+        *old_flags_out = rtnl_link_get_flags(rtnl_link);
     }
 
 out:
-    rtnl_link_put(rtnl_link_patch);
+    rtnl_link_put(rtnl_link_changes);
     rtnl_link_put(rtnl_link);
 
     return err;
@@ -309,87 +314,48 @@ tuna_error
 tuna_set_name(tuna_device *device, char const *name) {
     struct nl_sock *nl_sock = NULL;
     struct rtnl_link *rtnl_link = NULL;
-    struct rtnl_link *rtnl_link_patch = NULL;
-    unsigned char must_bring_up = 0;
+    struct rtnl_link *rtnl_link_changes = NULL;
+    unsigned flags = 0;
 
     int err = 0;
 
-    size_t name_len = strlen(name);
-    if (name_len == 0) {
-        err = TUNA_INVALID_NAME;
-        goto out;
-    }
-    if (name_len >= IF_NAMESIZE) {
-        err = TUNA_NAME_TOO_LONG;
-        goto out;
-    }
+    size_t length = strlen(name);
+    if (((length == 0) && (err = TUNA_INVALID_NAME))
+     || ((length >= IF_NAMESIZE) && (err = TUNA_NAME_TOO_LONG))
+     || (err = tuna_open_nl_sock(&nl_sock))
+     || (err = tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                               rtnl_link_unset_flags,
+                                               IFF_UP, &flags))
+     || (err = tuna_get_rtnl_link_via(nl_sock, device->index, &rtnl_link))
+     || (err = tuna_allocate_rtnl_link(&rtnl_link_changes)))
+    { goto out; }
 
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
+    rtnl_link_set_name(rtnl_link_changes, name);
 
-    if ((err = rtnl_link_get_kernel(nl_sock,
-                                    device->index, NULL, &rtnl_link)))
+    if ((err = tuna_change_rtnl_link_via(nl_sock,
+                                         rtnl_link, rtnl_link_changes)))
     {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-    if (!strcmp(rtnl_link_get_name(rtnl_link), name)) {
-        goto out;
-    }
-
-    if (rtnl_link_get_flags(rtnl_link) & IFF_UP) {
-        if (!(rtnl_link_patch = rtnl_link_alloc())) {
-            err = TUNA_OUT_OF_MEMORY;
-            goto out;
-        }
-        rtnl_link_unset_flags(rtnl_link_patch, IFF_UP);
-
-        if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
-            err = tuna_translate_nlerr(-err);
-            goto out;
-        }
-        must_bring_up = 1;
-
-        rtnl_link_put(rtnl_link_patch); rtnl_link_patch = NULL;
-        rtnl_link_put(rtnl_link); rtnl_link = NULL;
-
-        if ((err = rtnl_link_get_kernel(nl_sock,
-                                        device->index, NULL, &rtnl_link)))
-        {
-            err = tuna_translate_nlerr(-err);
-            goto out;
-        }
-        if (!strcmp(rtnl_link_get_name(rtnl_link), name)) {
-            goto out;
-        }
-    }
-
-    if (!(rtnl_link_patch = rtnl_link_alloc())) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-    rtnl_link_set_name(rtnl_link_patch, name);
-
-    if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
         switch (err) {
         case -NLE_INVAL:
             err = TUNA_INVALID_NAME;
-            goto out;
+            break;
         case -NLE_EXIST:
             err = TUNA_DUPLICATE_NAME;
-            goto out;
+            break;
         default:
             err = tuna_translate_nlerr(-err);
-            goto out;
         }
+        goto out;
     }
 
 out:
-    rtnl_link_put(rtnl_link_patch);
+    rtnl_link_put(rtnl_link_changes);
     rtnl_link_put(rtnl_link);
 
-    if (must_bring_up && tuna_bring_up_via(nl_sock, device->index)) {
+    if (tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                        rtnl_link_set_flags,
+                                        flags & IFF_UP, NULL))
+    {
         close(device->fd); device->fd = -1;
         err = TUNA_DEVICE_LOST;
     }
@@ -407,14 +373,9 @@ tuna_get_rtnl_link(int index, struct rtnl_link **rtnl_link_out) {
 
     int err = 0;
 
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
-
-    if ((err = rtnl_link_get_kernel(nl_sock, index, NULL, &rtnl_link))) {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
+    if ((err = tuna_open_nl_sock(&nl_sock))
+     || (err = tuna_get_rtnl_link_via(nl_sock, index, &rtnl_link)))
+    { goto out; }
 
     *rtnl_link_out = rtnl_link; rtnl_link = NULL;
 
@@ -426,7 +387,7 @@ out:
 }
 
 tuna_error
-tuna_get_mtu(tuna_device const *device, size_t *mtu) {
+tuna_get_mtu(tuna_device const *device, size_t *mtu_out) {
     struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;
@@ -435,7 +396,7 @@ tuna_get_mtu(tuna_device const *device, size_t *mtu) {
         goto out;
     }
 
-    *mtu = rtnl_link_get_mtu(rtnl_link);
+    *mtu_out = rtnl_link_get_mtu(rtnl_link);
 
 out:
     rtnl_link_put(rtnl_link);
@@ -447,31 +408,20 @@ tuna_error
 tuna_set_mtu(tuna_device *device, size_t mtu) {
     struct nl_sock *nl_sock = NULL;
     struct rtnl_link *rtnl_link = NULL;
-    struct rtnl_link *rtnl_link_patch = NULL;
+    struct rtnl_link *rtnl_link_changes = NULL;
 
     int err = 0;
 
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
-        goto out;
-    }
+    if ((err = tuna_open_nl_sock(&nl_sock))
+     || (err = tuna_get_rtnl_link_via(nl_sock, device->index, &rtnl_link))
+     || (err = tuna_allocate_rtnl_link(&rtnl_link_changes)))
+    { goto out; }
 
-    if ((err = rtnl_link_get_kernel(nl_sock,
-                                    device->index, NULL, &rtnl_link)))
+    rtnl_link_set_mtu(rtnl_link_changes, mtu);
+
+    if ((err = tuna_change_rtnl_link_via(nl_sock,
+                                         rtnl_link, rtnl_link_changes)))
     {
-        err = tuna_translate_nlerr(-err);
-        goto out;
-    }
-    if (rtnl_link_get_mtu(rtnl_link) == mtu) {
-        goto out;
-    }
-
-    if (!(rtnl_link_patch = rtnl_link_alloc())) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-    rtnl_link_set_mtu(rtnl_link_patch, mtu);
-
-    if ((err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_patch, 0))) {
         if (err == -NLE_INVAL) {
             size_t current_mtu = rtnl_link_get_mtu(rtnl_link);
             if (mtu < current_mtu) {
@@ -488,7 +438,7 @@ tuna_set_mtu(tuna_device *device, size_t mtu) {
     }
 
 out:
-    rtnl_link_put(rtnl_link_patch);
+    rtnl_link_put(rtnl_link_changes);
     rtnl_link_put(rtnl_link);
     nl_socket_free(nl_sock);
 
@@ -496,7 +446,7 @@ out:
 }
 
 tuna_error
-tuna_get_status(tuna_device const *device, tuna_status *status) {
+tuna_get_status(tuna_device const *device, tuna_status *status_out) {
     struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;
@@ -508,10 +458,10 @@ tuna_get_status(tuna_device const *device, tuna_status *status) {
     switch (rtnl_link_get_operstate(rtnl_link)) {
     case IF_OPER_UNKNOWN:
     case IF_OPER_UP:
-        *status = TUNA_CONNECTED;
+        *status_out = TUNA_CONNECTED;
         break;
     default:
-        *status = TUNA_DISCONNECTED;
+        *status_out = TUNA_DISCONNECTED;
     }
 
 out:
@@ -637,21 +587,17 @@ tuna_error
 tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
                  tuna_device const *attach_target)
 {
-    tuna_device *device = NULL;
     struct nl_sock *nl_sock = NULL;
+    tuna_device *device = NULL;
 
     int err = 0;
 
-    if ((err = tuna_allocate_device(&device))) {
-        goto out;
-    }
+    if ((err = tuna_open_nl_sock(&nl_sock))
+     || (err = tuna_allocate_device(&device)))
+    { goto out; }
 
     if ((device->fd = open("/dev/net/tun", O_RDWR)) == -1) {
         err = tuna_translate_syserr(errno);
-        goto out;
-    }
-
-    if ((err = tuna_open_nl_sock(&nl_sock))) {
         goto out;
     }
 
@@ -687,11 +633,7 @@ get_index:
         // appears to be no way to completely rule out a race, we content
         // ourselves with only handling the basic case, judging the rest
         // extremely unlikely to ever happen.
-        if (errno == ENODEV) {
-            if (ioctl(device->fd, TUNGETIFF, &ifr) == -1) {
-                err = tuna_translate_syserr(errno);
-                goto out;
-            }
+        if (errno == ENODEV && ioctl(device->fd, TUNGETIFF, &ifr) != -1) {
             goto get_index;
         }
         err = tuna_translate_syserr(errno);
@@ -699,30 +641,28 @@ get_index:
     }
     device->index = ifr.ifr_ifindex;
 
-    if (attach_target) {
-        // Even assuming the interface's index has been determined correctly,
-        // if the attach target interface has been deleted or renamed just
-        // before TUNSETIFF, then TUNSETIFF will succeed and create a new
-        // interface instead of attaching to an existing one. At least we can
-        // detect this afterwards, since the new interface will have a
-        // different index.
-        if (device->index != attach_target->index) {
-            err = TUNA_DEVICE_LOST;
-            goto out;
-        }
-    }
-
-    if ((err = tuna_bring_up_via(nl_sock, device->index))) {
+    // Even assuming the interface's index has been determined correctly, if
+    // the attach target interface has been deleted or renamed just before
+    // TUNSETIFF, then TUNSETIFF will succeed and create a new interface
+    // instead of attaching to an existing one. At least we can detect this
+    // afterwards, since the new interface will have a different index.
+    if (attach_target && device->index != attach_target->index) {
+        err = TUNA_DEVICE_LOST;
         goto out;
     }
+
+    if ((err = tuna_change_rtnl_link_flags_via(nl_sock, device->index,
+                                               rtnl_link_set_flags,
+                                               IFF_UP, NULL)))
+    { goto out; }
 
     //if ((err = tuna_disable_default_local_ip6_addr(device))) { goto out; }
 
     *device_out = device; device = NULL;
 
 out:
-    nl_socket_free(nl_sock);
     tuna_free_device(device);
+    nl_socket_free(nl_sock);
 
     return err;
 }
