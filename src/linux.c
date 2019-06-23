@@ -37,7 +37,6 @@ void
 tuna_free_device(tuna_device *device) {
     if (device) {
         tuna_finalize_device(device);
-
         free(device);
     }
 }
@@ -152,39 +151,39 @@ tuna_nested_find_nlattr(struct nlattr *nlattr, int type) {
 static
 int
 tuna_get_ownership_callback(struct nl_msg *nl_msg, void *context) {
-    tuna_ownership *ownership = context;
+    tuna_ownership *ownership_out = context;
 
     struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_LINKINFO);
     nlattr = tuna_nested_find_nlattr(nlattr, IFLA_INFO_DATA);
     nlattr = tuna_nested_find_nlattr(nlattr, IFLA_TUN_MULTI_QUEUE);
-    *ownership = nla_get_u8(nlattr);
+    *ownership_out = nla_get_u8(nlattr);
 
     return NL_STOP;
 }
 
 tuna_error
-tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership) {
+tuna_get_ownership(tuna_device const *device, tuna_ownership *ownership_out) {
     return tuna_get_raw_rtnl_link(device->index,
-                                  tuna_get_ownership_callback, ownership);
+                                  tuna_get_ownership_callback, ownership_out);
 }
 
 static
 int
 tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
-    tuna_lifetime *lifetime = context;
+    tuna_lifetime *lifetime_out = context;
 
     struct nlattr *nlattr = tuna_find_ifinfo_nlattr(nl_msg, IFLA_LINKINFO);
     nlattr = tuna_nested_find_nlattr(nlattr, IFLA_INFO_DATA);
     nlattr = tuna_nested_find_nlattr(nlattr, IFLA_TUN_PERSIST);
-    *lifetime = nla_get_u8(nlattr);
+    *lifetime_out = nla_get_u8(nlattr);
 
     return NL_STOP;
 }
 
 tuna_error
-tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime) {
+tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime_out) {
     return tuna_get_raw_rtnl_link(device->index,
-                                  tuna_get_lifetime_callback, lifetime);
+                                  tuna_get_lifetime_callback, lifetime_out);
 }
 
 static
@@ -426,14 +425,14 @@ tuna_set_mtu(tuna_device *device, size_t mtu) {
             size_t current_mtu = rtnl_link_get_mtu(rtnl_link);
             if (mtu < current_mtu) {
                 err = TUNA_MTU_TOO_SMALL;
-            } else if (mtu > current_mtu) {
-                err = TUNA_MTU_TOO_BIG;
-            } else {
-                err = TUNA_UNEXPECTED;
+                goto out;
             }
-        } else {
-            err = tuna_translate_nlerr(-err);
+            if (mtu > current_mtu) {
+                err = TUNA_MTU_TOO_BIG;
+                goto out;
+            }
         }
+        err = tuna_translate_nlerr(-err);
         goto out;
     }
 
@@ -704,7 +703,7 @@ tuna_get_device_at(tuna_device_list const *list, size_t index) {
 
 static
 int
-tuna_is_managed(struct rtnl_link *rtnl_link) {
+tuna_is_managed_rtnl_link(struct rtnl_link *rtnl_link) {
     char const *type = rtnl_link_get_type(rtnl_link);
     return type && !strcmp(type, "tun");
 }
@@ -731,7 +730,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
         struct rtnl_link *rtnl_link = (void *)nl_object;
-        count += tuna_is_managed(rtnl_link);
+        count += tuna_is_managed_rtnl_link(rtnl_link);
     }
 
     if (!(list = malloc(sizeof(*list) + count * sizeof(*list->devices)))) {
@@ -744,7 +743,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
         struct rtnl_link *rtnl_link = (void *)nl_object;
-        if (!tuna_is_managed(rtnl_link)) {
+        if (!tuna_is_managed_rtnl_link(rtnl_link)) {
             continue;
         }
 
