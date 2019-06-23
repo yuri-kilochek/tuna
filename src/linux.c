@@ -47,17 +47,19 @@ tuna_translate_nlerr(int err) {
     switch (err) {
     case 0:
         return 0;
+    default:
+    case NLE_FAILURE:
+        return TUNA_UNEXPECTED;
+    case NLE_NODEV:
+    case NLE_OBJ_NOTFOUND:
+        return TUNA_DEVICE_LOST;
     case NLE_PERM:
+    case NLE_NOACCESS:
         return TUNA_FORBIDDEN;
     case NLE_NOMEM:
         return TUNA_OUT_OF_MEMORY;
     case NLE_BUSY:
         return TUNA_DEVICE_BUSY;
-    case NLE_NODEV:
-    case NLE_OBJ_NOTFOUND:
-        return TUNA_DEVICE_LOST;
-    default:
-        return TUNA_UNEXPECTED;
     }
 }
 
@@ -192,7 +194,13 @@ tuna_translate_syserr(int err) {
     switch (err) {
     case 0:
         return 0;
+    default:
+        return TUNA_UNEXPECTED;
+    case ENXIO:
+    case ENODEV:
+        return TUNA_DEVICE_LOST;
     case EPERM:
+    case EACCES:
         return TUNA_FORBIDDEN;
     case ENOMEM:
     case ENOBUFS:
@@ -200,13 +208,8 @@ tuna_translate_syserr(int err) {
     case EMFILE:
     case ENFILE:
         return TUNA_TOO_MANY_HANDLES;
-    case ENXIO:
-    case ENODEV:
-        return TUNA_DEVICE_LOST;
     case EBUSY:
         return TUNA_DEVICE_BUSY;
-    default:
-        return TUNA_UNEXPECTED;
     }
 }
 
