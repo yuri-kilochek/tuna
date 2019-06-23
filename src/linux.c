@@ -789,7 +789,7 @@ struct tuna_device_list {
 void
 tuna_free_device_list(tuna_device_list *list) {
     if (list) {
-        for (size_t i = list->device_count; i--;) {
+        for (size_t i = 0; i < list->device_count; ++i) {
             tuna_finalize_device(&list->devices[i]);
         }
         free(list);
@@ -808,9 +808,17 @@ tuna_get_device_at(tuna_device_list const *list, size_t index) {
 
 static
 int
-tuna_is_managed_rtnl_link(struct rtnl_link *rtnl_link) {
+tuna_managed_rtnl_link_to_device(struct rtnl_link *rtnl_link,
+                                 tuna_device *device)
+{
     char const *type = rtnl_link_get_type(rtnl_link);
-    return type && !strcmp(type, "tun");
+    if (type && !strcmp(type, "tun")) {
+        if (device) {
+            device->index = rtnl_link_get_ifindex(rtnl_link);
+        }
+        return 1;
+    }
+    return 0;
 }
 
 tuna_error
@@ -835,27 +843,24 @@ tuna_get_device_list(tuna_device_list **list_out) {
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
         struct rtnl_link *rtnl_link = (void *)nl_object;
-        count += tuna_is_managed_rtnl_link(rtnl_link);
+        count += tuna_managed_rtnl_link_to_device(rtnl_link, NULL);
     }
 
     if (!(list = malloc(sizeof(*list) + count * sizeof(*list->devices)))) {
         err = tuna_translate_syserr(errno);
         goto out;
     }
-    list->device_count = 0;
+    list->device_count = count;
+    for (size_t i = 0; i < count; ++i) {
+        tuna_initialize_device(&list->devices[i]);
+    }
 
+    size_t i = 0;
     for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
         struct rtnl_link *rtnl_link = (void *)nl_object;
-        if (!tuna_is_managed_rtnl_link(rtnl_link)) {
-            continue;
-        }
-
-        tuna_device *device = &list->devices[list->device_count++];
-        tuna_initialize_device(device);
-
-        device->index = rtnl_link_get_ifindex(rtnl_link);
+        i += tuna_managed_rtnl_link_to_device(rtnl_link, &list->devices[i]);
     }
 
     *list_out = list; list = NULL;
