@@ -482,6 +482,111 @@ tuna_get_io_handle(tuna_device *device) {
     return device->fd;
 }
 
+struct tuna_address_list {
+    size_t address_count;
+    union {
+        tuna_address_family family;
+        tuna_ip4_address ip4;
+        tuna_ip6_address ip6;
+    } addresses[];
+};
+
+void
+tuna_free_address_list(tuna_address_list *list) {
+    free(list);
+}
+
+size_t
+tuna_get_address_count(tuna_address_list const *list) {
+    return list->address_count;
+}
+
+tuna_address const *
+tuna_get_address_at(tuna_address_list const *list, size_t index) {
+    return (void *)&list->addresses[index];
+}
+
+static
+int
+tuna_local_nl_addr_to_address(int index, struct rtnl_addr *rtnl_addr,
+                              tuna_address *address)
+{
+    if (rtnl_addr_get_ifindex(rtnl_addr) == index) {
+        struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
+        switch (nl_addr_get_family(nl_addr)) {
+        case AF_INET:
+            if (address) {
+                tuna_ip4_address *ip4 = (void *)address;
+                ip4->family = TUNA_IP4;
+                memcpy(ip4->value, nl_addr_get_binary_addr(nl_addr), 4);
+                ip4->prefix_length = nl_addr_get_prefixlen(nl_addr);
+            }
+            return 1;
+        case AF_INET6:
+            if (address) {
+                tuna_ip6_address *ip6 = (void *)address;
+                ip6->family = TUNA_IP6;
+                memcpy(ip6->value, nl_addr_get_binary_addr(nl_addr), 16);
+                ip6->prefix_length = nl_addr_get_prefixlen(nl_addr);
+            }
+            return 1;
+        }
+    }
+    return 0;
+}
+
+tuna_error
+tuna_get_address_list(tuna_device const *device,
+                      tuna_address_list **list_out)
+{
+    struct nl_sock *nl_sock = NULL;
+    struct nl_cache *nl_cache = NULL;
+    tuna_address_list *list = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_open_nl_sock(&nl_sock))) {
+        goto out;
+    }
+
+    if ((err = rtnl_addr_alloc_cache(nl_sock, &nl_cache))) {
+        err = tuna_translate_nlerr(-err);
+        goto out;
+    }
+
+    size_t count = 0;
+    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
+         nl_object; nl_object = nl_cache_get_next(nl_object))
+    {
+        struct rtnl_addr *rtnl_addr = (void *)nl_object;
+        count += tuna_local_nl_addr_to_address(device->index, rtnl_addr, NULL);
+    }
+
+    if (!(list = malloc(sizeof(*list) + count * sizeof(*list->addresses)))) {
+        err = tuna_translate_syserr(errno);
+        goto out;
+    }
+    list->address_count = count;
+
+    size_t i = 0;
+    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
+         nl_object; nl_object = nl_cache_get_next(nl_object))
+    {
+        struct rtnl_addr *rtnl_addr = (void *)nl_object;
+        i += tuna_local_nl_addr_to_address(device->index, rtnl_addr,
+                                           (void *)&list->addresses[i]);
+    }
+
+    *list_out = list; list = NULL;
+
+out:
+    tuna_free_address_list(list);
+    nl_cache_free(nl_cache);
+    nl_socket_free(nl_sock);
+
+    return err;
+}
+
 static
 void
 tuna_initialize_device(tuna_device *device) {
@@ -782,79 +887,6 @@ out:
 
 
 
-//static
-//int
-//tuna_addr_from_nl(tuna_address *addr, struct nl_addr *nl_addr) {
-//    switch (nl_addr_get_family(nl_addr)) {
-//      case AF_INET:;
-//        addr->family = TUNA_IP4;
-//        memcpy(addr->ip4.value, nl_addr_get_binary_addr(nl_addr), 4);
-//        addr->ip4.prefix_length = nl_addr_get_prefixlen(nl_addr);
-//        return 1;
-//      case AF_INET6:;
-//        addr->family = TUNA_IP6;
-//        memcpy(addr->ip6.value, nl_addr_get_binary_addr(nl_addr), 16);
-//        addr->ip6.prefix_length = nl_addr_get_prefixlen(nl_addr);
-//        return 1;
-//      default:;
-//        return 0;
-//    }
-//}
-//
-//tuna_error
-//tuna_get_addresses(tuna_device const *device,
-//                   tuna_address const **addresses, size_t *count)
-//{
-//    tuna_device *dev = (void *)device;
-//
-//    struct nl_cache *nl_cache = NULL;
-//
-//    int err = 0;
-//
-//    if ((err = rtnl_addr_alloc_cache(dev->nl_sock, &nl_cache))) {
-//        err = tuna_translate_nlerr(-err);
-//        goto out;
-//    }
-//
-//    size_t cnt = 0;
-//    for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
-//         nl_object; nl_object = nl_cache_get_next(nl_object))
-//    {
-//        if (cnt == dev->addrs_cap) {
-//            size_t addrs_cap = dev->addrs_cap * 5 / 3 + 1;
-//            tuna_address *addrs = realloc(dev->addrs,
-//                                          addrs_cap * sizeof(*addrs));
-//            if (!addrs) {
-//                err = TUNA_OUT_OF_MEMORY;
-//                goto out;
-//            }
-//            dev->addrs = addrs;
-//            dev->addrs_cap = addrs_cap;
-//        }
-//        struct rtnl_addr *rtnl_addr = (void *)nl_object;
-//        
-//        if (rtnl_addr_get_ifindex(rtnl_addr) != dev->ifindex) { continue; }
-//
-//        struct nl_addr *nl_addr = rtnl_addr_get_local(rtnl_addr);
-//        if (!tuna_addr_from_nl(dev->addrs + cnt, nl_addr)) { continue; }
-//
-//        ++cnt;
-//    }
-//
-//    tuna_address *addrs = realloc(dev->addrs, cnt * sizeof(*addrs));
-//    if (!cnt || addrs) {
-//        dev->addrs = addrs;
-//        dev->addrs_cap = cnt;
-//    }
-//
-//    *addresses = dev->addrs;
-//    *count = cnt;
-//
-//  out:;
-//    nl_cache_free(nl_cache);
-//
-//    return err;
-//}
 //
 //static
 //tuna_error
