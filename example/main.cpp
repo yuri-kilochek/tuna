@@ -68,6 +68,20 @@ int main() {
         return EXIT_FAILURE;
     }
 
+    tuna_ip4_address new_address = {
+        .family = TUNA_IP4,
+        .value = {20, 30, 40, 50},
+        .prefix_length = 24,
+    };
+    if (auto e = tuna_add_address(device_a, (tuna_address *)&new_address)) {
+        std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
+    if (auto e = tuna_remove_address(device_a, (tuna_address *)&new_address)) {
+        std::cerr << "tuna_remove_address failed: " << tuna_get_error_name(e) << "\n";
+        return EXIT_FAILURE;
+    }
+
     //tuna_device *device_b;
     //if (auto err = tuna_attach_device(&device_b, device_a)) {
     //    std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
@@ -209,31 +223,8 @@ int main() {
     std::cout << std::flush;
 
 
-    //tuna_address new_address;
-    //new_address.family = TUNA_IP4;
-    //new_address.ip4.value[0] = 20;
-    //new_address.ip4.value[1] = 30;
-    //new_address.ip4.value[2] = 40;
-    //new_address.ip4.value[3] = 50;
-    //new_address.ip4.prefix_length = 24;
-    //switch (auto e = tuna_add_address(device, &new_address)) {
-    //  case 0:
-    //    break;
-    //  default:
-    //    std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
-    //    return EXIT_FAILURE;
-    //}
-    //switch (auto e = tuna_add_address(device, &new_address)) {
-    //  case 0:
-    //    break;
-    //  default:
-    //    std::cerr << "tuna_add_address failed: " << tuna_get_error_name(e) << "\n";
-    //    return EXIT_FAILURE;
-    //}
 
-
-
-    for (int i = 0; i < 10; ++i) {
+    for (int i = 0; i < 100; ++i) {
         std::this_thread::sleep_for(std::chrono::seconds(1));
 
         //tuna_status status = (i % 2) ? TUNA_UP : TUNA_DOWN;
