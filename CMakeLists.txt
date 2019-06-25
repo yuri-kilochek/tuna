@@ -51,6 +51,7 @@ endif()
 if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
     _tuna_embed_tap_windows(tuna)
+
     target_link_libraries(tuna PRIVATE pathcch setupapi newdev)
 endif()
 
