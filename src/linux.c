@@ -23,7 +23,7 @@ struct tuna_device {
 
 static
 void
-tuna_finalize_device(tuna_device *device) {
+tuna_deinitialize_device(tuna_device *device) {
     if (device->fd != -1) {
         close(device->fd);
     }
@@ -32,19 +32,18 @@ tuna_finalize_device(tuna_device *device) {
 void
 tuna_free_device(tuna_device *device) {
     if (device) {
-        tuna_finalize_device(device);
+        tuna_deinitialize_device(device);
         free(device);
     }
 }
 
 static
 tuna_error
-tuna_translate_nlerr(int err) {
+tuna_translate_nl_error(int err) {
     switch (err) {
     case 0:
         return 0;
     default:
-    case NLE_FAILURE:
         return TUNA_UNEXPECTED;
     case NLE_NODEV:
     case NLE_OBJ_NOTFOUND:
@@ -79,7 +78,7 @@ tuna_get_raw_rtnl_link_via(struct nl_sock *nl_sock, int index,
      || (err = nl_send_auto(nl_sock, nl_msg)) < 0
      || (err = nl_recvmsgs(nl_sock, nl_cb)))
     {
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -103,7 +102,7 @@ tuna_open_nl_sock(struct nl_sock **nl_sock_out) {
     }
 
     if ((err = nl_connect(nl_sock, NETLINK_ROUTE))) {
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -186,8 +185,8 @@ tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime_out) {
 
 static
 tuna_error
-tuna_translate_syserr(int err) {
-    switch (err) {
+tuna_translate_sys_error(int errnum) {
+    switch (errnum) {
     case 0:
         return 0;
     default:
@@ -212,7 +211,7 @@ tuna_translate_syserr(int err) {
 tuna_error
 tuna_set_lifetime(tuna_device *device, tuna_lifetime lifetime) {
     if (ioctl(device->fd, TUNSETPERSIST, (unsigned long)lifetime) == -1) {
-        return tuna_translate_syserr(errno);
+        return tuna_translate_sys_error(errno);
     }
     return 0;
 }
@@ -237,7 +236,7 @@ tuna_get_name(tuna_device const *device, char **name_out) {
     if (!(name = malloc(IF_NAMESIZE))
      || !if_indextoname(device->index, name))
     {
-        err = tuna_translate_syserr(errno);
+        err = tuna_translate_sys_error(errno);
         goto out;
     }
 
@@ -255,7 +254,7 @@ tuna_get_rtnl_link_via(struct nl_sock *nl_sock, int index,
                        struct rtnl_link **rtnl_link_out)
 {
     int err = rtnl_link_get_kernel(nl_sock, index, NULL, rtnl_link_out);
-    if (err) { return tuna_translate_nlerr(-err); }
+    if (err) { return tuna_translate_nl_error(-err); }
     return 0;
 }
 
@@ -275,7 +274,7 @@ tuna_change_rtnl_link_via(struct nl_sock *nl_sock,
                           struct rtnl_link *rtnl_link_changes)
 {
     int err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_changes, 0);
-    if (err) { return tuna_translate_nlerr(-err); }
+    if (err) { return tuna_translate_nl_error(-err); }
     return 0;
 }
 
@@ -341,7 +340,7 @@ tuna_set_name(tuna_device *device, char const *name) {
             err = TUNA_DUPLICATE_NAME;
             break;
         default:
-            err = tuna_translate_nlerr(-err);
+            err = tuna_translate_nl_error(-err);
         }
         goto out;
     }
@@ -431,7 +430,7 @@ tuna_set_mtu(tuna_device *device, size_t mtu) {
                 goto out;
             }
         }
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -471,7 +470,7 @@ out:
 tuna_error
 tuna_set_status(tuna_device *device, tuna_status status) {
     if (ioctl(device->fd, TUNSETCARRIER, &(unsigned int){status}) == -1) {
-        return tuna_translate_syserr(errno);
+        return tuna_translate_sys_error(errno);
     }
     return 0;
 }
@@ -517,7 +516,7 @@ tuna_address_to_local_nl_addr(int index,
         break;
     }
     if ((err = rtnl_addr_set_local(rtnl_addr, nl_addr))) {
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -543,7 +542,7 @@ tuna_add_address(tuna_device *device, tuna_address const *address) {
     { goto out; }
 
     if ((err = rtnl_addr_add(nl_sock, rtnl_addr, NLM_F_REPLACE))) {
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -570,7 +569,7 @@ tuna_remove_address(tuna_device *device, tuna_address const *address) {
         if (err == -NLE_NOADDR) {
             err = 0;
         } else {
-            err = tuna_translate_nlerr(-err);
+            err = tuna_translate_nl_error(-err);
             goto out;
         }
     }
@@ -650,7 +649,7 @@ tuna_get_address_list(tuna_device const *device,
     }
 
     if ((err = rtnl_addr_alloc_cache(nl_sock, &nl_cache))) {
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -663,7 +662,7 @@ tuna_get_address_list(tuna_device const *device,
     }
 
     if (!(list = malloc(sizeof(*list) + count * sizeof(*list->addresses)))) {
-        err = tuna_translate_syserr(errno);
+        err = tuna_translate_sys_error(errno);
         goto out;
     }
     list->address_count = count;
@@ -687,12 +686,8 @@ out:
     return err;
 }
 
-static
-void
-tuna_initialize_device(tuna_device *device) {
-    *device = (tuna_device){
-        .fd = -1,
-    };
+#define TUNA_DEVICE_INITIALIZER (tuna_device){ \
+    .fd = -1, \
 }
 
 static
@@ -700,9 +695,9 @@ tuna_error
 tuna_allocate_device(tuna_device **device_out) {
     tuna_device *device;
     if (!(device = malloc(sizeof(*device)))) {
-        return tuna_translate_syserr(errno);
+        return tuna_translate_sys_error(errno);
     }
-    tuna_initialize_device(device);
+    *device = TUNA_DEVICE_INITIALIZER;
 
     *device_out = device;
 
@@ -743,7 +738,7 @@ tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
 //
 //    struct ifinfomsg ifi = {.ifi_index = device->index};
 //    if ((err = nlmsg_append(nl_msg, &ifi, sizeof(ifi), NLMSG_ALIGNTO))) {
-//        err = tuna_translate_nlerr(-err);
+//        err = tuna_translate_nl_error(-err);
 //        goto out;
 //    }
 //
@@ -762,7 +757,7 @@ tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
 //    if ((err = nla_put_u8(nl_msg, IFLA_INET6_ADDR_GEN_MODE,
 //                                  IN6_ADDR_GEN_MODE_NONE)))
 //    {
-//        err = tuna_translate_nlerr(-err);
+//        err = tuna_translate_nl_error(-err);
 //        goto out;
 //    }
 //
@@ -771,12 +766,12 @@ tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
 //    nla_nest_end(nl_msg, ifla_af_spec_nlattr);
 //
 //    if ((err = nl_send_auto(device->nl_sock, nl_msg)) < 0) {
-//        err = tuna_translate_nlerr(-err);
+//        err = tuna_translate_nl_error(-err);
 //        goto out;
 //    }
 //
 //    if ((err = nl_wait_for_ack(device->nl_sock))) {
-//        err = tuna_translate_nlerr(-err);
+//        err = tuna_translate_nl_error(-err);
 //        goto out;
 //    }
 //
@@ -801,7 +796,7 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
     { goto out; }
 
     if ((device->fd = open("/dev/net/tun", O_RDWR)) == -1) {
-        err = tuna_translate_syserr(errno);
+        err = tuna_translate_sys_error(errno);
         goto out;
     }
 
@@ -817,7 +812,7 @@ tuna_open_device(tuna_device **device_out, tuna_ownership ownership,
         ifr.ifr_flags |= IFF_MULTI_QUEUE & -ownership;
     }
     if (ioctl(device->fd, TUNSETIFF, &ifr) == -1) {
-        err = tuna_translate_syserr(errno);
+        err = tuna_translate_sys_error(errno);
         goto out;
     }
 
@@ -840,7 +835,7 @@ get_index:
         if (errno == ENODEV && ioctl(device->fd, TUNGETIFF, &ifr) != -1) {
             goto get_index;
         }
-        err = tuna_translate_syserr(errno);
+        err = tuna_translate_sys_error(errno);
         goto out;
     }
     device->index = ifr.ifr_ifindex;
@@ -890,7 +885,7 @@ void
 tuna_free_device_list(tuna_device_list *list) {
     if (list) {
         for (size_t i = 0; i < list->device_count; ++i) {
-            tuna_finalize_device(&list->devices[i]);
+            tuna_deinitialize_device(&list->devices[i]);
         }
         free(list);
     }
@@ -934,7 +929,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
     }
 
     if ((err = rtnl_link_alloc_cache(nl_sock, AF_UNSPEC, &nl_cache))) {
-        err = tuna_translate_nlerr(-err);
+        err = tuna_translate_nl_error(-err);
         goto out;
     }
 
@@ -947,12 +942,12 @@ tuna_get_device_list(tuna_device_list **list_out) {
     }
 
     if (!(list = malloc(sizeof(*list) + count * sizeof(*list->devices)))) {
-        err = tuna_translate_syserr(errno);
+        err = tuna_translate_sys_error(errno);
         goto out;
     }
     list->device_count = count;
     for (size_t i = 0; i < count; ++i) {
-        tuna_initialize_device(&list->devices[i]);
+        list->devices[i] = TUNA_DEVICE_INITIALIZER;
     }
 
     size_t i = 0;
