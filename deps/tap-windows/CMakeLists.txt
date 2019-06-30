@@ -91,7 +91,7 @@ function(_tuna_embed_tap_windows TARGET)
     target_include_directories("${TARGET}" PRIVATE
         "${_TUNA_TAP_WINDOWS_INCLUDE_DIR}"
     )
-    _tuna_embed_driver("${TARGET}" tuna_embedded_tap_windows
+    _tuna_embed_driver("${TARGET}" tuna_priv_embedded_tap_windows
         "${_TUNA_TAP_WINDOWS_INF}"
         "${_TUNA_TAP_WINDOWS_CAT}"
         "${_TUNA_TAP_WINDOWS_SYS}"

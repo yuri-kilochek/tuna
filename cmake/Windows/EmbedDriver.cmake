@@ -38,9 +38,9 @@ endfunction()
 function(_tuna_embed_driver TARGET VAR INF CAT SYS)
     string(MD5 TAG "${VAR}")
 
-    set(INF_VAR "tuna_embedded_driver_${TAG}_inf")
-    set(CAT_VAR "tuna_embedded_driver_${TAG}_cat")
-    set(SYS_VAR "tuna_embedded_driver_${TAG}_sys")
+    set(INF_VAR "tuna_priv_embedded_driver_${TAG}_inf")
+    set(CAT_VAR "tuna_priv_embedded_driver_${TAG}_cat")
+    set(SYS_VAR "tuna_priv_embedded_driver_${TAG}_sys")
 
     _tuna_embed_file("${TARGET}" "${INF_VAR}" "${INF}")
     _tuna_embed_file("${TARGET}" "${CAT_VAR}" "${CAT}")
