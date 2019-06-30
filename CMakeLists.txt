@@ -52,6 +52,9 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
     _tuna_embed_tap_windows(tuna)
 
+    add_subdirectory(src/windows/janitor)
+    _tuna_embed_janitor(tuna)
+
     target_link_libraries(tuna PRIVATE pathcch setupapi newdev)
 endif()
 

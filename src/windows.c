@@ -664,6 +664,7 @@
 //}
 
 extern tuna_embedded_driver const tuna_priv_embedded_tap_windows;
+extern tuna_embedded_file const tuna_priv_embedded_janitor;
 
 struct tuna_device {
     HANDLE handle;
