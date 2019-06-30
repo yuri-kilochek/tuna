@@ -1,13 +1,7 @@
 #ifndef TUNA_WINDOWS_EMBEDDED_DRIVER_INCLUDED
 #define TUNA_WINDOWS_EMBEDDED_DRIVER_INCLUDED
 
-#include <stddef.h>
-
-typedef struct {
-    wchar_t const *name;
-    size_t size;
-    unsigned char const *data;
-} tuna_embedded_file;
+#include <tuna/priv/windows/embedded_file.h>
 
 typedef struct {
     wchar_t const *hardware_id;
