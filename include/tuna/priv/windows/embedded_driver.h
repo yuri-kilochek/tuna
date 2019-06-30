@@ -10,6 +10,7 @@ typedef struct {
 } tuna_embedded_file;
 
 typedef struct {
+    wchar_t const *hardware_id;
     tuna_embedded_file const *inf_file;
     tuna_embedded_file const *cat_file;
     tuna_embedded_file const *sys_file;
