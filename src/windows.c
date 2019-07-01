@@ -23,136 +23,122 @@
 
 //#define TUNA_NO_SUCH_PROPERTY (-2)
 //#define TUNA_NO_ANCESTOR_DIR (-1)
-//
-//static
-//int
-//tuna_translate_error(DWORD err_code) {
-//    switch (err_code) {
-//      case ERROR_PATH_NOT_FOUND:;
-//        return TUNA_NO_ANCESTOR_DIR;
-//      case 0:;
-//        return 0;
-//      case ERROR_ACCESS_DENIED:;
-//      case ERROR_AUTHENTICODE_PUBLISHER_NOT_TRUSTED:;
-//        return TUNA_FORBIDDEN;
-//      case ERROR_NOT_ENOUGH_MEMORY:;
-//      case ERROR_OUTOFMEMORY:;
-//        return TUNA_OUT_OF_MEMORY;
-//      case ERROR_TOO_MANY_OPEN_FILES:;
-//        return TUNA_TOO_MANY_HANDLES;
-//      default:;
-//        return TUNA_UNEXPECTED;
-//    }
-//}
-//
-//static
-//int
-//tuna_translate_hresult(HRESULT hres) {
-//    switch (HRESULT_FACILITY(hres)) {
-//      case FACILITY_WIN32:;
-//        return tuna_translate_error(HRESULT_CODE(hres));
-//      default:;
-//        switch (hres) {
-//          case 0:;
-//            return 0;
-//          default:;
-//            return TUNA_UNEXPECTED;
-//        }
-//    }
-//}
-//
-//static
-//int
-//tuna_join_paths(wchar_t **joined_out,
-//                wchar_t const *base, wchar_t const *extra)
-//{
-//    wchar_t *local_joined = NULL;
-//    wchar_t *joined = NULL;
-//
-//    int err = 0;
-//
-//    HRESULT hres = PathAllocCombine(base, extra, PATHCCH_ALLOW_LONG_PATHS,
-//                                    &local_joined);
-//    if (hres) {
-//        local_joined = NULL;
-//        err = tuna_translate_hresult(hres);
-//        goto out;
-//    }
-//
-//    if (!(joined = malloc((wcslen(local_joined) + 1) * sizeof(*joined)))) {
-//        err = TUNA_OUT_OF_MEMORY;
-//        goto out;
-//    }
-//    wcscpy(joined, local_joined);
-//
-//    *joined_out = joined;
-//
-//  out:;
-//    if (err) { free(joined); }
-//    LocalFree(local_joined);
-//
-//    return err;
-//}
-//
-//static
-//void
-//tuna_unextrude_file(wchar_t *path, HANDLE handle) {
-//    free(path);
-//    if (handle != INVALID_HANDLE_VALUE) { CloseHandle(handle); }
-//}
-//
-//static
-//int
-//tuna_extrude_file(wchar_t **path_out, HANDLE *handle_out,
-//                  wchar_t const *dir,
-//                  tuna_embedded_file const *embedded)
-//{
-//    wchar_t *path = NULL;
-//    HANDLE handle = INVALID_HANDLE_VALUE;
-//
-//    int err = 0;
-//
-//    if ((err = tuna_join_paths(&path, dir, embedded->name))) {
-//        goto out;
-//    }
-//    handle = CreateFileW(path,
-//                         GENERIC_WRITE,
-//                         FILE_SHARE_READ,
-//                         NULL,
-//                         CREATE_ALWAYS,
-//                         FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_DELETE_ON_CLOSE,
-//                         NULL);
-//    if (handle == INVALID_HANDLE_VALUE) {
-//        err = tuna_translate_error(GetLastError());
-//        goto out;
-//    }
-//
-//    if (!WriteFile(handle,
-//                   embedded->data, (DWORD)embedded->size,
-//                   &(DWORD){0},
-//                   NULL))
-//    {
-//        err = tuna_translate_error(GetLastError());
-//        goto out;
-//    }
-//
-//    if (!FlushFileBuffers(handle)) {
-//        err = tuna_translate_error(GetLastError());
-//        goto out;
-//    }
-//
-//    if (path_out) { *path_out = path; }
-//    *handle_out = handle;
-//
-//  out:;
-//    if (err) {
-//        tuna_unextrude_file(path, handle);
-//    } else if (!path_out) {
-//        free(path);
-//    }
-//
-//    return err;
-//}
+
+static
+int
+tuna_translate_sys_error(DWORD err_code) {
+    switch (err_code) {
+    //case ERROR_PATH_NOT_FOUND:
+    //    return TUNA_NO_ANCESTOR_DIR;
+    case 0:
+        return 0;
+    default:
+        return TUNA_UNEXPECTED;
+    case ERROR_ACCESS_DENIED:
+    case ERROR_AUTHENTICODE_PUBLISHER_NOT_TRUSTED:
+        return TUNA_FORBIDDEN;
+    case ERROR_NOT_ENOUGH_MEMORY:
+    case ERROR_OUTOFMEMORY:
+        return TUNA_OUT_OF_MEMORY;
+    case ERROR_TOO_MANY_OPEN_FILES:
+        return TUNA_TOO_MANY_HANDLES;
+    }
+}
+
+static
+int
+tuna_translate_hresult(HRESULT hres) {
+    switch (HRESULT_FACILITY(hres)) {
+    case FACILITY_WIN32:
+        return tuna_translate_sys_error(HRESULT_CODE(hres));
+    default:
+        switch (hres) {
+        case 0:
+            return 0;
+        default:
+            return TUNA_UNEXPECTED;
+        }
+    }
+}
+
+static
+int
+tuna_join_paths(wchar_t const *base, wchar_t const *extra,
+                wchar_t **joined_out)
+{
+    wchar_t *local_joined = NULL;
+    wchar_t *joined = NULL;
+
+    int err = 0;
+    HRESULT hres;
+
+    if ((hres = PathAllocCombine(base, extra, PATHCCH_ALLOW_LONG_PATHS,
+                                 &local_joined)))
+    {
+        local_joined = NULL;
+        err = tuna_translate_hresult(hres);
+        goto out;
+    }
+
+    size_t joined_size = (wcslen(local_joined) + 1) * sizeof(*joined);
+    if (!(joined = malloc(joined_size))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+    memcpy(joined, local_joined, joined_size);
+
+    *joined_out = joined; joined = NULL;
+
+out:
+    free(joined);
+    LocalFree(local_joined);
+
+    return err;
+}
+
+static
+int
+tuna_extrude_file(tuna_embedded_file const *embedded, wchar_t const *dir,
+                  wchar_t **path_out)
+{
+    wchar_t *path = NULL;
+    HANDLE handle = INVALID_HANDLE_VALUE;
+
+    int err = 0;
+
+    if ((err = tuna_join_paths(embedded->name, dir, &path))) {
+        goto out;
+    }
+
+    if ((handle = CreateFileW(path,
+                              GENERIC_WRITE,
+                              0,
+                              NULL,
+                              CREATE_ALWAYS,
+                              FILE_ATTRIBUTE_NORMAL,
+                              NULL)) == INVALID_HANDLE_VALUE
+     || !WriteFile(handle,
+                   embedded->data, (DWORD)embedded->size,
+                   &(DWORD){0},
+                   NULL)
+     || !FlushFileBuffers(handle))
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    if (path_out) {
+        *path_out = path; path = NULL;
+    }
+
+out:
+    free(path);
+    if (handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(handle);
+    }
+
+    return err;
+}
 //
 //static
 //int
