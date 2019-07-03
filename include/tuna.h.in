@@ -23,7 +23,7 @@ extern "C" {
 ///////////////////////////////////////////////////////////////////////////////
 
 #if defined(TUNA_IMPORT) && defined(TUNA_EXPORT)
-    #error "TUNA_IMPORT and TUNA_EXPORT must not be defined simultaneously."
+    #error "TUNA_IMPORT and TUNA_EXPORT must not be defined simultaneously"
 #endif
 
 #if TUNA_PRIV_OS_WINDOWS

@@ -1,12 +1,14 @@
 #include <tuna.h>
 
 #include <wchar.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
 
 #include <windows.h>
+#include <shlobj.h>
 #include <shlwapi.h>
 #include <pathcch.h>
 #include <cfgmgr32.h>
@@ -21,15 +23,10 @@
 
 #pragma warning(disable: 4996) // No, MSVC, C functions are not deprecated.
 
-//#define TUNA_NO_SUCH_PROPERTY (-2)
-//#define TUNA_NO_ANCESTOR_DIR (-1)
-
 static
 int
 tuna_translate_sys_error(DWORD err_code) {
     switch (err_code) {
-    //case ERROR_PATH_NOT_FOUND:
-    //    return TUNA_NO_ANCESTOR_DIR;
     case 0:
         return 0;
     default:
@@ -80,12 +77,10 @@ tuna_join_paths(wchar_t const *base, wchar_t const *extra,
         goto out;
     }
 
-    size_t joined_size = (wcslen(local_joined) + 1) * sizeof(*joined);
-    if (!(joined = malloc(joined_size))) {
+    if (!(joined = _wcsdup(local_joined))) {
         err = TUNA_OUT_OF_MEMORY;
         goto out;
     }
-    memcpy(joined, local_joined, joined_size);
 
     *joined_out = joined; joined = NULL;
 
@@ -139,142 +134,140 @@ out:
 
     return err;
 }
-//
-//static
-//int
-//tuna_get_extrusion_dir(wchar_t **dir_out) {
-//    wchar_t temp_dir[MAX_PATH + 1];
-//    if (!GetTempPathW(_countof(temp_dir), temp_dir)) {
-//        return tuna_translate_error(GetLastError());
-//    }
-//    return tuna_join_paths(dir_out, temp_dir, L"TunaDrivers");
-//}
-//
-//typedef struct {
-//    wchar_t *inf_path;
-//    HANDLE inf_handle;
-//    HANDLE cat_handle;
-//    HANDLE sys_handle;
-//} tuna_extruded_driver;
-//
-//#define TUNA_EXTRUDED_DRIVER_INIT { \
-//    .inf_handle = INVALID_HANDLE_VALUE, \
-//    .cat_handle = INVALID_HANDLE_VALUE, \
-//    .sys_handle = INVALID_HANDLE_VALUE, \
-//}
-//
-//static
-//void
-//tuna_unextrude_driver(tuna_extruded_driver const *extruded) {
-//    wchar_t *dir = NULL;
-//    wchar_t *subdir = NULL;
-//    HANDLE handle = INVALID_HANDLE_VALUE;
-//
-//    tuna_unextrude_file(extruded->inf_path, extruded->sys_handle);
-//    tuna_unextrude_file(NULL, extruded->cat_handle);
-//    tuna_unextrude_file(NULL, extruded->inf_handle);
-//
-//    if (tuna_get_extrusion_dir(&dir)) { goto out; }
-//
-//    if (tuna_join_paths(&subdir, dir, L"*")) { goto out; }
-//
-//    WIN32_FIND_DATAW data;
-//    handle = FindFirstFileExW(subdir,
-//                              FindExInfoBasic,
-//                              &data,
-//                              FindExSearchLimitToDirectories,
-//                              NULL,
-//                              0);
-//    if (handle == INVALID_HANDLE_VALUE) { goto out; }
-//    do {
-//        wchar_t *name = data.cFileName;
-//        if (!wcscmp(name, L".")) { continue; }
-//        if (!wcscmp(name, L"..")) { continue; }
-//
-//        free(subdir); subdir = NULL;
-//        if (tuna_join_paths(&subdir, dir, name)) { goto out; }
-//
-//        RemoveDirectoryW(subdir);
-//    } while (FindNextFileW(handle, &data));
-//
-//    RemoveDirectoryW(dir);
-//
-//  out:;
-//    if (handle != INVALID_HANDLE_VALUE) { FindClose(handle); };
-//    free(subdir);
-//    free(dir);
-//}
-//
-//static
-//int
-//tuna_extrude_driver(tuna_extruded_driver *extruded_out,
-//                    tuna_embedded_driver const *embedded)
-//{
-//    wchar_t *dir = NULL;
-//    wchar_t *subdir = NULL;
-//    tuna_extruded_driver extruded = TUNA_EXTRUDED_DRIVER_INIT;
-//
-//    int err = 0;
-//
-//    if ((err = tuna_get_extrusion_dir(&dir))) { goto out; }
-//
-//    wchar_t subdir_name[sizeof(uintmax_t) * 2 + 1];
-//    if (swprintf(subdir_name, _countof(subdir_name),
-//                 L"%jx", (uintmax_t)GetCurrentThreadId()) < 0)
-//    {
-//        err = TUNA_UNEXPECTED;
-//        goto out;
-//    }
-//    if ((err = tuna_join_paths(&subdir, dir, subdir_name))) { goto out; }
-//
-//  create_dir:;
-//    if (!CreateDirectoryW(dir, NULL)) {
-//        DWORD err_code = GetLastError();
-//        switch (err_code) {
-//          case ERROR_ALREADY_EXISTS:;
-//            break;
-//          default:;
-//            err = tuna_translate_error(err_code);
-//            goto out;
-//        }
-//    }
-//
-//  create_subdir:;
-//    if (!CreateDirectoryW(subdir, NULL)) {
-//        DWORD err_code = GetLastError();
-//        switch (err_code) {
-//          case ERROR_PATH_NOT_FOUND:;
-//            goto create_dir;
-//          case ERROR_ALREADY_EXISTS:;
-//            break;
-//          default:;
-//            err = tuna_translate_error(err_code);
-//            goto out;
-//        }
-//    }
-//
-//    switch ((err = tuna_extrude_file(&extruded.inf_path, &extruded.inf_handle,
-//                                     subdir, embedded->inf_file)))
-//    {
-//      case TUNA_NO_ANCESTOR_DIR:;
-//        goto create_subdir;
-//      case 0:;
-//        break;
-//      default:;
-//        goto out;
-//    }
-//    if ((err = tuna_extrude_file(NULL, &extruded.cat_handle,
-//                                 subdir, embedded->cat_file))) { goto out; }
-//    if ((err = tuna_extrude_file(NULL, &extruded.sys_handle,
-//                                 subdir, embedded->sys_file))) { goto out; }
-//
-//    *extruded_out = extruded;
-//
-//  out:;
-//    if (err) { tuna_unextrude_driver(&extruded); }
-//
-//    return err;
-//}
+
+static
+int
+tuna_extrude_driver(tuna_embedded_driver const *embedded, wchar_t const *dir,
+                    wchar_t **inf_path_out)
+{
+    wchar_t *inf_path = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_extrude_file(embedded->inf_file, dir, &inf_path))
+     || (err = tuna_extrude_file(embedded->cat_file, dir, NULL))
+     || (err = tuna_extrude_file(embedded->sys_file, dir, NULL)))
+    { goto out; }
+
+    *inf_path_out = inf_path; inf_path = NULL;
+
+out:
+    free(inf_path);
+
+    return err;
+}
+
+static
+int
+tuna_get_program_data_dir(wchar_t **dir_out) {
+    wchar_t *co_task_dir = NULL;
+    wchar_t *dir = NULL;
+
+    int err = 0;
+    HRESULT hres;
+
+    if ((hres = SHGetKnownFolderPath(&FOLDERID_ProgramData,
+                                     KF_FLAG_CREATE,
+                                     NULL,
+                                     &co_task_dir)))
+    {
+        co_task_dir = NULL;
+        err = tuna_translate_hresult(hres);
+        goto out;
+    }
+
+    if (!(dir = _wcsdup(co_task_dir))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    *dir_out = dir; dir = NULL;
+
+out:
+    free(dir);
+    CoTaskMemFree(co_task_dir);
+
+    return err;
+}
+
+static
+int
+tuna_ensure_dir_exists(wchar_t const *dir) {
+    if (!CreateDirectoryW(dir, NULL)) {
+        DWORD err_code = GetLastError();
+        if (err_code != ERROR_ALREADY_EXISTS) {
+            return tuna_translate_sys_error(err_code);
+        }
+    }
+    return 0;
+}
+
+#define TUNA_STRINGIFY_INDIRECT(token) \
+    #token \
+/**/
+#define TUNA_STRINGIFY(token) \
+    TUNA_STRINGIFY_INDIRECT(token) \
+/**/
+
+#define TUNA_VERSION_STRING \
+    L"" TUNA_STRINGIFY(TUNA_VERSION_MAJOR) \
+    "." TUNA_STRINGIFY(TUNA_VERSION_MINOR) \
+    "." TUNA_STRINGIFY(TUNA_VERSION_PATCH) \
+/**/
+
+#if UINTPTR_MAX == 0xFFFFFFFF
+    #define TUNA_ARCH_STRING L"32"
+#else
+    #define TUNA_ARCH_STRING L"64"
+#endif
+
+#define TUNA_EXTRUSION_MUTEX_NAME \
+    L"Global\\tuna\\" TUNA_VERSION_STRING "\\" TUNA_ARCH_STRING "\\extrusion" \
+/**/
+
+static
+int
+tuna_extrude(tuna_embedded_driver const *embedded_driver,
+             wchar_t **driver_inf_path_out, wchar_t **janitor_path_out)
+{
+    wchar_t *program_data_dir = NULL;
+    wchar_t *base_dir = NULL;
+    wchar_t *version_dir = NULL;
+    wchar_t *arch_dir = NULL;
+    HANDLE mutex = NULL;
+
+    int err = 0;
+
+    if ((err = tuna_get_program_data_dir(&program_data_dir))
+     || (err = tuna_join_paths(program_data_dir, L"tuna", &base_dir))
+     || (err = tuna_ensure_dir_exists(base_dir))
+     || (err = tuna_join_paths(base_dir, TUNA_VERSION_STRING, &version_dir))
+     || (err = tuna_ensure_dir_exists(version_dir))
+     || (err = tuna_join_paths(version_dir, TUNA_ARCH_STRING, &arch_dir))
+     || (err = tuna_ensure_dir_exists(arch_dir)))
+    { goto out; }
+
+    if (!(mutex = CreateMutexW(NULL, FALSE, TUNA_EXTRUSION_MUTEX_NAME))) {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    // 
+    //
+    // TODO:
+    //
+    //
+
+out:
+    if (mutex != NULL) { CloseHandle(mutex); }
+    free(arch_dir);
+    free(version_dir);
+    free(base_dir);
+    free(program_data_dir);
+
+    return err;
+}
+
 //
 //typedef struct {
 //    wchar_t **items;
