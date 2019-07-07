@@ -94,32 +94,34 @@ out:
 static
 int
 tuna_extrude_file(tuna_embedded_file const *embedded, wchar_t const *dir,
-                  wchar_t **path_out)
+                  wchar_t **path_out, int dry_run)
 {
     wchar_t *path = NULL;
     HANDLE handle = INVALID_HANDLE_VALUE;
 
     int err = 0;
 
-    if ((err = tuna_join_paths(embedded->name, dir, &path))) {
+    if ((err = tuna_join_paths(dir, embedded->name, &path))) {
         goto out;
     }
 
-    if ((handle = CreateFileW(path,
-                              GENERIC_WRITE,
-                              0,
-                              NULL,
-                              CREATE_ALWAYS,
-                              FILE_ATTRIBUTE_NORMAL,
-                              NULL)) == INVALID_HANDLE_VALUE
-     || !WriteFile(handle,
-                   embedded->data, (DWORD)embedded->size,
-                   &(DWORD){0},
-                   NULL)
-     || !FlushFileBuffers(handle))
-    {
-        err = tuna_translate_sys_error(GetLastError());
-        goto out;
+    if (!dry_run) {
+        if ((handle = CreateFileW(path,
+                                  GENERIC_WRITE,
+                                  0,
+                                  NULL,
+                                  CREATE_ALWAYS,
+                                  FILE_ATTRIBUTE_NORMAL,
+                                  NULL)) == INVALID_HANDLE_VALUE
+         || !WriteFile(handle,
+                       embedded->data, (DWORD)embedded->size,
+                       &(DWORD){0},
+                       NULL)
+         || !FlushFileBuffers(handle))
+        {
+            err = tuna_translate_sys_error(GetLastError());
+            goto out;
+        }
     }
 
     if (path_out) {
@@ -138,15 +140,15 @@ out:
 static
 int
 tuna_extrude_driver(tuna_embedded_driver const *embedded, wchar_t const *dir,
-                    wchar_t **inf_path_out)
+                    wchar_t **inf_path_out, int dry_run)
 {
     wchar_t *inf_path = NULL;
 
     int err = 0;
 
-    if ((err = tuna_extrude_file(embedded->inf_file, dir, &inf_path))
-     || (err = tuna_extrude_file(embedded->cat_file, dir, NULL))
-     || (err = tuna_extrude_file(embedded->sys_file, dir, NULL)))
+    if ((err = tuna_extrude_file(embedded->inf_file, dir, &inf_path, dry_run))
+     || (err = tuna_extrude_file(embedded->cat_file, dir, NULL, dry_run))
+     || (err = tuna_extrude_file(embedded->sys_file, dir, NULL, dry_run)))
     { goto out; }
 
     *inf_path_out = inf_path; inf_path = NULL;
@@ -159,14 +161,14 @@ out:
 
 static
 int
-tuna_get_program_data_dir(wchar_t **dir_out) {
+tuna_get_local_app_data_dir(wchar_t **dir_out) {
     wchar_t *co_task_dir = NULL;
     wchar_t *dir = NULL;
 
     int err = 0;
     HRESULT hres;
 
-    if ((hres = SHGetKnownFolderPath(&FOLDERID_ProgramData,
+    if ((hres = SHGetKnownFolderPath(&FOLDERID_LocalAppData,
                                      KF_FLAG_CREATE,
                                      NULL,
                                      &co_task_dir)))
@@ -210,9 +212,9 @@ tuna_ensure_dir_exists(wchar_t const *dir) {
 /**/
 
 #define TUNA_VERSION_STRING \
-    L"" TUNA_STRINGIFY(TUNA_VERSION_MAJOR) \
-    "." TUNA_STRINGIFY(TUNA_VERSION_MINOR) \
-    "." TUNA_STRINGIFY(TUNA_VERSION_PATCH) \
+    L"" TUNA_STRINGIFY(TUNA_MAJOR_VERSION) \
+    "." TUNA_STRINGIFY(TUNA_MINOR_VERSION) \
+    "." TUNA_STRINGIFY(TUNA_PATCH_VERSION) \
 /**/
 
 #if UINTPTR_MAX == 0xFFFFFFFF
@@ -222,24 +224,45 @@ tuna_ensure_dir_exists(wchar_t const *dir) {
 #endif
 
 #define TUNA_EXTRUSION_MUTEX_NAME \
-    L"Global\\tuna\\" TUNA_VERSION_STRING "\\" TUNA_ARCH_STRING "\\extrusion" \
+    L"Global\\tuna-" TUNA_VERSION_STRING "-" TUNA_ARCH_STRING "-extrusion" \
 /**/
+
+static
+int
+tuna_path_exists(wchar_t const *path, int *exists_out) {
+    if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) {
+        DWORD err_code = GetLastError();
+        if (err_code != ERROR_FILE_NOT_FOUND) {
+            return tuna_translate_sys_error(err_code);
+        }
+        *exists_out = 0;
+    } else {
+        *exists_out = 1;
+    }
+    return 0;
+}
+
+extern tuna_embedded_file const tuna_priv_embedded_janitor;
 
 static
 int
 tuna_extrude(tuna_embedded_driver const *embedded_driver,
              wchar_t **driver_inf_path_out, wchar_t **janitor_path_out)
 {
-    wchar_t *program_data_dir = NULL;
+    wchar_t *local_app_data_dir = NULL;
     wchar_t *base_dir = NULL;
     wchar_t *version_dir = NULL;
     wchar_t *arch_dir = NULL;
     HANDLE mutex = NULL;
+    wchar_t *marker_path = NULL;
+    wchar_t *driver_inf_path = NULL;
+    wchar_t *janitor_path = NULL;
+    HANDLE marker_handle = INVALID_HANDLE_VALUE;
 
     int err = 0;
 
-    if ((err = tuna_get_program_data_dir(&program_data_dir))
-     || (err = tuna_join_paths(program_data_dir, L"tuna", &base_dir))
+    if ((err = tuna_get_local_app_data_dir(&local_app_data_dir))
+     || (err = tuna_join_paths(local_app_data_dir, L"tuna", &base_dir))
      || (err = tuna_ensure_dir_exists(base_dir))
      || (err = tuna_join_paths(base_dir, TUNA_VERSION_STRING, &version_dir))
      || (err = tuna_ensure_dir_exists(version_dir))
@@ -252,18 +275,55 @@ tuna_extrude(tuna_embedded_driver const *embedded_driver,
         goto out;
     }
 
-    // 
-    //
-    // TODO:
-    //
-    //
+    switch (WaitForSingleObject(mutex, INFINITE)) {
+    case WAIT_ABANDONED:
+    case WAIT_OBJECT_0:
+        break;
+    default:
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    int extruded;
+    if ((err = tuna_join_paths(arch_dir, L"extrusion_marker", &marker_path))
+     || (err = tuna_path_exists(marker_path, &extruded))
+     || (err = tuna_extrude_driver(embedded_driver, arch_dir,
+                                   &driver_inf_path, extruded))
+     || (err = tuna_extrude_file(&tuna_priv_embedded_janitor, arch_dir,
+                                 &janitor_path, extruded)))
+    { goto out; }
+    if (!extruded) {
+        if ((marker_handle = CreateFileW(marker_path,
+                                         0,
+                                         0,
+                                         NULL,
+                                         CREATE_ALWAYS,
+                                         FILE_ATTRIBUTE_NORMAL,
+                                         NULL)) == INVALID_HANDLE_VALUE)
+        {
+            err = tuna_translate_sys_error(GetLastError());
+            goto out;
+        }
+    }
+
+    *driver_inf_path_out = driver_inf_path; driver_inf_path = NULL;
+    *janitor_path_out = janitor_path; janitor_path = NULL;
 
 out:
-    if (mutex != NULL) { CloseHandle(mutex); }
+    if (marker_handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(marker_handle);
+    }
+    free(janitor_path);
+    free(driver_inf_path);
+    free(marker_path);
+    if (mutex) {
+        ReleaseMutex(mutex);
+        CloseHandle(mutex);
+    }
     free(arch_dir);
     free(version_dir);
     free(base_dir);
-    free(program_data_dir);
+    free(local_app_data_dir);
 
     return err;
 }
@@ -643,7 +703,6 @@ out:
 //}
 
 extern tuna_embedded_driver const tuna_priv_embedded_tap_windows;
-extern tuna_embedded_file const tuna_priv_embedded_janitor;
 
 struct tuna_device {
     HANDLE handle;
@@ -651,6 +710,22 @@ struct tuna_device {
 
 #define TUNA_DEVICE_INITIALIZER (tuna_device){ \
     .handle = INVALID_HANDLE_VALUE, \
+}
+
+// XXX: test stub
+tuna_error
+tuna_create_device(tuna_device **device, tuna_ownership ownership) {
+    *device = NULL;
+
+    wchar_t *driver_inf_path = NULL;
+    wchar_t *janitor_path = NULL;
+
+    int err = tuna_extrude(&tuna_priv_embedded_tap_windows, &driver_inf_path, &janitor_path);
+    if (err) { return err; }
+
+    wprintf(L"XXX\ninf_path: %s\njanitor_path: %s\n", driver_inf_path, janitor_path);
+
+    return 0;
 }
 
 static

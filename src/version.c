@@ -3,6 +3,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 tuna_version
-tuna_get_linked_version(void) {
-    return TUNA_INCLUDED_VERSION;
+tuna_get_version(void) {
+    return TUNA_VERSION;
 }
