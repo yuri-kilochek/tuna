@@ -9,6 +9,8 @@ tuna_get_error_name(tuna_error error) {
         return "0";
     case TUNA_UNEXPECTED:
         return "unexpected";
+    case TUNA_UNSUPPORTED:
+        return "unsupported";
     case TUNA_DEVICE_LOST:
         return "device lost";
     case TUNA_FORBIDDEN:

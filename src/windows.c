@@ -23,8 +23,32 @@
 
 #pragma warning(disable: 4996) // No, MSVC, C functions are not deprecated.
 
+struct tuna_device {
+    HANDLE handle;
+    HANDLE janitor_handle;
+};
+
 static
-int
+void
+tuna_deinitialize_device(tuna_device *device) {
+    if (device->janitor_handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(device->janitor_handle);
+    }
+    if (device->handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(device->handle);
+    }
+}
+
+void
+tuna_free_device(tuna_device *device) {
+    if (device) {
+        tuna_deinitialize_device(device);
+        free(device);
+    }
+}
+
+static
+tuna_error
 tuna_translate_sys_error(DWORD err_code) {
     switch (err_code) {
     case 0:
@@ -43,7 +67,7 @@ tuna_translate_sys_error(DWORD err_code) {
 }
 
 static
-int
+tuna_error
 tuna_translate_hresult(HRESULT hres) {
     switch (HRESULT_FACILITY(hres)) {
     case FACILITY_WIN32:
@@ -59,14 +83,14 @@ tuna_translate_hresult(HRESULT hres) {
 }
 
 static
-int
+tuna_error
 tuna_join_paths(wchar_t const *base, wchar_t const *extra,
                 wchar_t **joined_out)
 {
     wchar_t *local_joined = NULL;
     wchar_t *joined = NULL;
 
-    int err = 0;
+    tuna_error err = 0;
     HRESULT hres;
 
     if ((hres = PathAllocCombine(base, extra, PATHCCH_ALLOW_LONG_PATHS,
@@ -92,14 +116,14 @@ out:
 }
 
 static
-int
+tuna_error
 tuna_extrude_file(tuna_embedded_file const *embedded, wchar_t const *dir,
                   wchar_t **path_out, int dry_run)
 {
     wchar_t *path = NULL;
     HANDLE handle = INVALID_HANDLE_VALUE;
 
-    int err = 0;
+    tuna_error err = 0;
 
     if ((err = tuna_join_paths(dir, embedded->name, &path))) {
         goto out;
@@ -138,13 +162,13 @@ out:
 }
 
 static
-int
+tuna_error
 tuna_extrude_driver(tuna_embedded_driver const *embedded, wchar_t const *dir,
                     wchar_t **inf_path_out, int dry_run)
 {
     wchar_t *inf_path = NULL;
 
-    int err = 0;
+    tuna_error err = 0;
 
     if ((err = tuna_extrude_file(embedded->inf_file, dir, &inf_path, dry_run))
      || (err = tuna_extrude_file(embedded->cat_file, dir, NULL, dry_run))
@@ -160,12 +184,12 @@ out:
 }
 
 static
-int
+tuna_error
 tuna_get_local_app_data_dir(wchar_t **dir_out) {
     wchar_t *co_task_dir = NULL;
     wchar_t *dir = NULL;
 
-    int err = 0;
+    tuna_error err = 0;
     HRESULT hres;
 
     if ((hres = SHGetKnownFolderPath(&FOLDERID_LocalAppData,
@@ -193,7 +217,7 @@ out:
 }
 
 static
-int
+tuna_error
 tuna_ensure_dir_exists(wchar_t const *dir) {
     if (!CreateDirectoryW(dir, NULL)) {
         DWORD err_code = GetLastError();
@@ -228,7 +252,7 @@ tuna_ensure_dir_exists(wchar_t const *dir) {
 /**/
 
 static
-int
+tuna_error
 tuna_path_exists(wchar_t const *path, int *exists_out) {
     if (GetFileAttributesW(path) == INVALID_FILE_ATTRIBUTES) {
         DWORD err_code = GetLastError();
@@ -245,9 +269,9 @@ tuna_path_exists(wchar_t const *path, int *exists_out) {
 extern tuna_embedded_file const tuna_priv_embedded_janitor;
 
 static
-int
-tuna_extrude(tuna_embedded_driver const *embedded_driver,
-             wchar_t **driver_inf_path_out, wchar_t **janitor_path_out)
+tuna_error
+tuna_ensure_extruded(tuna_embedded_driver const *embedded_driver,
+                     wchar_t **driver_inf_path_out, wchar_t **janitor_path_out)
 {
     wchar_t *local_app_data_dir = NULL;
     wchar_t *base_dir = NULL;
@@ -259,7 +283,7 @@ tuna_extrude(tuna_embedded_driver const *embedded_driver,
     wchar_t *janitor_path = NULL;
     HANDLE marker_handle = INVALID_HANDLE_VALUE;
 
-    int err = 0;
+    tuna_error err = 0;
 
     if ((err = tuna_get_local_app_data_dir(&local_app_data_dir))
      || (err = tuna_join_paths(local_app_data_dir, L"tuna", &base_dir))
@@ -584,16 +608,16 @@ out:
 
 
 
-//static
-//tuna_error
-//tuna_install_driver(tuna_embedded_driver const *embedded,
-//                    wchar_t const *hardware_id)
-//{
+static
+tuna_error
+tuna_install_driver(wchar_t const *inf_path, wchar_t const *hardware_id,
+                    HANDLE *janitor_handle)
+{
 //    tuna_extruded_driver extruded = {0};
 //    HDEVINFO dev_info = INVALID_HANDLE_VALUE;
 //    _Bool registered = 0;
-//    
-//    tuna_error err = 0;
+    
+    tuna_error err = 0;
 //    
 //    if ((err = tuna_extrude_driver(&extruded, embedded))) { goto out; }
 //
@@ -661,7 +685,7 @@ out:
 //    }
 //    assert(!need_reboot);
 //
-//  out:;
+//out:
 //    if (err && registered) {
 //        SetupDiCallClassInstaller(DIF_REMOVE, dev_info, &dev_info_data);
 //    }
@@ -670,76 +694,53 @@ out:
 //    }
 //    tuna_erase_extruded_driver(&extruded);
 //
-//    return err;
-//}
-
-//tuna_error
-//tuna_create_device(tuna_device **device) {
-//    tuna_device *dev = NULL;
-//
-//    tuna_error err = 0;
-//
-//    //if ((err = tuna_install_driver(&tuna_embedded_tap_windows,
-//    //                               TUNA_TAP_WINDOWS_HARDWARE_ID)))
-//    //{ goto fail; }
-//
-//    if (!(dev = malloc(sizeof(*dev)))) {
-//        err = TUNA_OUT_OF_MEMORY;
-//        goto fail;
-//    }
-//    *dev = (tuna_device){.handle = INVALID_HANDLE_VALUE};
-//
-//
-//
-//
-//
-//    *device = dev;
-//
-//  done:;
-//    return err;
-//  fail:;
-//    tuna_destroy_device(dev);
-//    goto done;
-//}
-
-extern tuna_embedded_driver const tuna_priv_embedded_tap_windows;
-
-struct tuna_device {
-    HANDLE handle;
-};
+    return err;
+}
 
 #define TUNA_DEVICE_INITIALIZER (tuna_device){ \
     .handle = INVALID_HANDLE_VALUE, \
+    .janitor_handle = INVALID_HANDLE_VALUE, \
 }
 
-// XXX: test stub
+static
 tuna_error
-tuna_create_device(tuna_device **device, tuna_ownership ownership) {
-    *device = NULL;
+tuna_allocate_device(tuna_device **device_out) {
+    tuna_device *device;
+    if (!(device = malloc(sizeof(*device)))) {
+        return TUNA_OUT_OF_MEMORY;
+    }
+    *device = TUNA_DEVICE_INITIALIZER;
 
-    wchar_t *driver_inf_path = NULL;
-    wchar_t *janitor_path = NULL;
-
-    int err = tuna_extrude(&tuna_priv_embedded_tap_windows, &driver_inf_path, &janitor_path);
-    if (err) { return err; }
-
-    wprintf(L"XXX\ninf_path: %s\njanitor_path: %s\n", driver_inf_path, janitor_path);
+    *device_out = device;
 
     return 0;
 }
 
-static
-void
-tuna_deinitialize_device(tuna_device *device) {
-    if (device->handle != INVALID_HANDLE_VALUE) {
-        CloseHandle(device->handle);
-    }
-}
+extern tuna_embedded_driver const tuna_priv_embedded_tap_windows;
 
-void
-tuna_free_device(tuna_device *device) {
-    if (device) {
-        tuna_deinitialize_device(device);
-        free(device);
-    }
+tuna_error
+tuna_create_device(tuna_device **device_out, tuna_ownership ownership) {
+    wchar_t *driver_inf_path = NULL;
+    wchar_t *janitor_path = NULL;
+    tuna_device *device = NULL;
+
+    tuna_error err = 0;
+
+    if (((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED))
+     || (err = tuna_ensure_extruded(&tuna_priv_embedded_tap_windows,
+                                    &driver_inf_path, &janitor_path))
+     || (err = tuna_allocate_device(&device))
+     || (err = tuna_install_driver(driver_inf_path,
+                                   tuna_priv_embedded_tap_windows.hardware_id,
+                                   &device->janitor_handle)))
+    { goto out; }
+
+    *device_out = device; device = NULL;
+
+out:
+    tuna_free_device(device);
+    free(janitor_path);
+    free(driver_inf_path);
+
+    return err;
 }
