@@ -170,15 +170,16 @@ tuna_extrude_janitor(wchar_t const *dir, int dry_run, wchar_t **path_out) {
                              path_out);
 }
 
+extern tuna_embedded_driver const tuna_priv_embedded_driver;
+
 static
 tuna_error
-tuna_extrude_driver(tuna_embedded_driver const *embedded,
-                    wchar_t const *dir, int dry_run, wchar_t **inf_path_out)
-{
+tuna_extrude_driver(wchar_t const *dir, int dry_run, wchar_t **inf_path_out) {
     wchar_t *inf_path = NULL;
 
     tuna_error err = 0;
 
+    tuna_embedded_driver const *embedded = &tuna_priv_embedded_driver;
     if ((err = tuna_extrude_file(embedded->inf_file, dir, dry_run, &inf_path))
      || (err = tuna_extrude_file(embedded->cat_file, dir, dry_run, NULL))
      || (err = tuna_extrude_file(embedded->sys_file, dir, dry_run, NULL)))
@@ -361,8 +362,7 @@ tuna_create_empty_file(wchar_t const *path) {
 
 static
 tuna_error
-tuna_ensure_extruded(tuna_embedded_driver const *embedded_driver,
-                     wchar_t **janitor_path_out, wchar_t **driver_inf_path_out)
+tuna_ensure_extruded(wchar_t **janitor_path_out, wchar_t **driver_inf_path_out)
 {
     wchar_t *dir = NULL;
     wchar_t *completion_marker_path = NULL;
@@ -379,8 +379,7 @@ tuna_ensure_extruded(tuna_embedded_driver const *embedded_driver,
      || (err = tuna_acquire_mutex(TUNA_EXTRUSION_MUTEX_NAME, &mutex))
      || (err = tuna_path_exists(completion_marker_path, &already))
      || (err = tuna_extrude_janitor(dir, already, &janitor_path))
-     || (err = tuna_extrude_driver(embedded_driver, dir, already,
-                                   &driver_inf_path))
+     || (err = tuna_extrude_driver(dir, already, &driver_inf_path))
      || !already && (err = tuna_create_empty_file(completion_marker_path)))
     { goto out; }
 
@@ -656,7 +655,7 @@ out:
 static
 tuna_error
 tuna_install_driver(wchar_t const *janitor_path, wchar_t const *inf_path,
-                    wchar_t const *hardware_id, HANDLE *janitor_handle_out)
+                    HANDLE *janitor_handle_out)
 {
     HANDLE janitor_handle = INVALID_HANDLE_VALUE;
     //HDEVINFO dev_info = INVALID_HANDLE_VALUE;
@@ -769,14 +768,10 @@ tuna_create_device(tuna_device **device_out, tuna_ownership ownership) {
 
     tuna_error err = 0;
 
-    tuna_embedded_driver const *embedded_driver
-        = &tuna_priv_embedded_tap_windows;
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
-     || (err = tuna_ensure_extruded(embedded_driver,
-                                    &janitor_path, &driver_inf_path))
+     || (err = tuna_ensure_extruded(&janitor_path, &driver_inf_path))
      || (err = tuna_allocate_device(&device))
      || (err = tuna_install_driver(janitor_path, driver_inf_path,
-                                   embedded_driver->hardware_id,
                                    device->janitor_handle)))
     { goto out; }
 
