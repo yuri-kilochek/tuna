@@ -22,7 +22,7 @@ int main() {
     }
 
     tuna_device *device_a;
-    if (auto err = tuna_create_device(&device_a, TUNA_EXCLUSIVE)) {
+    if (auto err = tuna_create_device(TUNA_EXCLUSIVE, &device_a)) {
         std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }

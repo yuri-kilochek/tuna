@@ -228,11 +228,11 @@ tuna_get_address_list(tuna_device const *device, tuna_address_list **list);
 
 TUNA_PRIV_API
 tuna_error
-tuna_create_device(tuna_device **device, tuna_ownership ownership);
+tuna_create_device(tuna_ownership ownership, tuna_device **device);
 
 TUNA_PRIV_API
 tuna_error
-tuna_attach_device(tuna_device **device, tuna_device const *target);
+tuna_attach_device(tuna_device const *target, tuna_device **device);
 
 ///////////////////////////////////////////////////////////////////////////////
 

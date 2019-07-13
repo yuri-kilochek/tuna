@@ -762,7 +762,7 @@ tuna_allocate_device(tuna_device **device_out) {
 }
 
 tuna_error
-tuna_create_device(tuna_device **device_out, tuna_ownership ownership) {
+tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
     wchar_t *janitor_path = NULL;
     wchar_t *driver_inf_path = NULL;
     tuna_device *device = NULL;
