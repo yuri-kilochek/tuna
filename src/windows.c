@@ -276,7 +276,6 @@ tuna_ensure_extrusion_dir_exists(wchar_t **dir_out) {
      || (err = tuna_ensure_dir_exists(arch_dir)))
     { goto out; }
 
-
     *dir_out = arch_dir; arch_dir = NULL;
 
 out:
@@ -299,7 +298,7 @@ tuna_release_mutex(HANDLE handle) {
 
 static
 tuna_error
-tuna_acquire_mutex(wchar_t const *name, HANDLE *handle_out) {
+tuna_acquire_mutex_by_name(wchar_t const *name, HANDLE *handle_out) {
     HANDLE handle = NULL;
 
     tuna_error err = 0;
@@ -376,7 +375,7 @@ tuna_ensure_extruded(wchar_t **janitor_path_out, wchar_t **driver_inf_path_out)
     if ((err = tuna_ensure_extrusion_dir_exists(&dir))
      || (err = tuna_join_paths(dir, L"extrusion_completion_marker",
                                &completion_marker_path))
-     || (err = tuna_acquire_mutex(TUNA_EXTRUSION_MUTEX_NAME, &mutex))
+     || (err = tuna_acquire_mutex_by_name(TUNA_EXTRUSION_MUTEX_NAME, &mutex))
      || (err = tuna_path_exists(completion_marker_path, &already))
      || (err = tuna_extrude_janitor(dir, already, &janitor_path))
      || (err = tuna_extrude_driver(dir, already, &driver_inf_path))
@@ -384,7 +383,9 @@ tuna_ensure_extruded(wchar_t **janitor_path_out, wchar_t **driver_inf_path_out)
     { goto out; }
 
     *janitor_path_out = janitor_path; janitor_path = NULL;
-    *driver_inf_path_out = driver_inf_path; driver_inf_path = NULL;
+    if (driver_inf_path_out) {
+        *driver_inf_path_out = driver_inf_path; driver_inf_path = NULL;
+    }
 
 out:
     free(driver_inf_path);
