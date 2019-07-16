@@ -23,20 +23,43 @@
 
 #pragma warning(disable: 4996) // No, MSVC, C functions are not deprecated.
 
-struct tuna_device {
+typedef struct {
     HANDLE handle;
-    HANDLE janitor_handle;
+    HANDLE stdin_handle;
+} tuna_janitor;
+
+//static
+//void
+//tuna_terminate_janitor(tuna_janitor *janitor) {
+//    if (janitor->handle != INVALID_HANDLE_VALUE) {
+//        TerminateProcess(janitor->handle, 0);
+//        WaitForSingleObject(janitor->handle);
+//        CloseHandle(janitor->stdin_handle);
+//        CloseHandle(janitor->handle);
+//    }
+//}
+
+struct tuna_device {
+    tuna_janitor janitor;
+    HANDLE handle;
 };
 
 static
 void
-tuna_deinitialize_device(tuna_device *device) {
-    if (device->janitor_handle != INVALID_HANDLE_VALUE) {
-        CloseHandle(device->janitor_handle);
+tuna_detach_janitor(tuna_janitor *janitor) {
+    if (janitor->handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(janitor->stdin_handle);
+        CloseHandle(janitor->handle);
     }
+}
+
+static
+void
+tuna_deinitialize_device(tuna_device *device) {
     if (device->handle != INVALID_HANDLE_VALUE) {
         CloseHandle(device->handle);
     }
+    tuna_detach_janitor(&device->janitor);
 }
 
 void
@@ -652,14 +675,18 @@ out:
 //static wchar_t const tuna_quote_prefix[] = L"tuna-quoted-";
 
 
+#define TUNA_JANITOR_INITIALIZER (tuna_janitor){ \
+    .handle = INVALID_HANDLE_VALUE, \
+    .stdin_handle = INVALID_HANDLE_VALUE, \
+}
 
 static
 tuna_error
-tuna_install_driver(HANDLE *janitor_handle_out) {
+tuna_install_driver(tuna_janitor *janitor_out) {
     wchar_t *janitor_path = NULL;
     wchar_t *inf_path = NULL;
-    HANDLE janitor_handle = INVALID_HANDLE_VALUE;
-    //HDEVINFO dev_info = INVALID_HANDLE_VALUE;
+    HDEVINFO dev_info = INVALID_HANDLE_VALUE;
+    tuna_janitor janitor = TUNA_JANITOR_INITIALIZER;
     //_Bool registered = 0;
     
     tuna_error err = 0;
@@ -668,35 +695,34 @@ tuna_install_driver(HANDLE *janitor_handle_out) {
         goto out;
     }
 
-    //GUID class_guid;
-    //wchar_t class_name[MAX_CLASS_NAME_LEN];
-    //if (!SetupDiGetINFClassW(extruded.inf_path,
-    //                         &class_guid,
-    //                         class_name,
-    //                         sizeof(class_name) / sizeof(*class_name),
-    //                         NULL))
-    //{
-    //    err = tuna_translate_error(GetLastError());
-    //    goto out;
-    //}
+    GUID class_guid;
+    wchar_t class_name[MAX_CLASS_NAME_LEN + 1];
+    SP_DEVINFO_DATA dev_info_data = {
+        .cbSize = sizeof(dev_info_data),
+    };
+    wchar_t instance_id[MAX_DEVICE_ID_LEN + 1];
+    if (!SetupDiGetINFClassW(inf_path,
+                             &class_guid,
+                             class_name, _countof(class_name),
+                             NULL)
+     || (dev_info = SetupDiCreateDeviceInfoList(&class_guid, NULL))
+            == INVALID_HANDLE_VALUE
+     || !SetupDiCreateDeviceInfoW(dev_info,
+                                  class_name, &class_guid,
+                                  NULL,
+                                  NULL,
+                                  DICD_GENERATE_ID,
+                                  &dev_info_data)
+     || !SetupDiGetDeviceInstanceIdW(dev_info,
+                                     &dev_info_data,
+                                     instance_id, _countof(instance_id),
+                                     &(DWORD){0}))
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
 
-    //dev_info = SetupDiCreateDeviceInfoList(&class_guid, NULL);
-    //if (dev_info == INVALID_HANDLE_VALUE) {
-    //    err = tuna_translate_error(GetLastError());
-    //    goto out;
-    //}
-
-    //SP_DEVINFO_DATA dev_info_data = {.cbSize = sizeof(dev_info_data)};
-    //if (!SetupDiCreateDeviceInfoW(dev_info,
-    //                              class_name, &class_guid,
-    //                              NULL,
-    //                              NULL,
-    //                              DICD_GENERATE_ID,
-    //                              &dev_info_data))
-    //{
-    //    err = tuna_translate_error(GetLastError());
-    //    goto out;
-    //}
+    fwprintf(stderr, L"\n\n\n\n------ instance_id: %s\n\n\n\n", instance_id);
 
     //assert(wcslen(hardware_id) <= MAX_DEVICE_ID_LEN);
     //wchar_t hardware_ids[MAX_DEVICE_ID_LEN + 1 + 1];
@@ -732,13 +758,16 @@ tuna_install_driver(HANDLE *janitor_handle_out) {
     //}
     //assert(!need_reboot);
 
+    *janitor_out = janitor; janitor = TUNA_JANITOR_INITIALIZER;
+
 out:
     //if (err && registered) {
     //    SetupDiCallClassInstaller(DIF_REMOVE, dev_info, &dev_info_data);
     //}
-    //if (dev_info != INVALID_HANDLE_VALUE) {
-    //    SetupDiDestroyDeviceInfoList(dev_info);
-    //}
+    tuna_detach_janitor(&janitor);
+    if (dev_info != INVALID_HANDLE_VALUE) {
+        SetupDiDestroyDeviceInfoList(dev_info);
+    }
     free(janitor_path);
     free(inf_path);
 
@@ -746,11 +775,9 @@ out:
     return err;
 }
 
-extern tuna_embedded_driver const tuna_priv_embedded_tap_windows;
-
 #define TUNA_DEVICE_INITIALIZER (tuna_device){ \
+    .janitor = TUNA_JANITOR_INITIALIZER, \
     .handle = INVALID_HANDLE_VALUE, \
-    .janitor_handle = INVALID_HANDLE_VALUE, \
 }
 
 static
@@ -775,7 +802,7 @@ tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
 
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
      || (err = tuna_allocate_device(&device))
-     || (err = tuna_install_driver(device->janitor_handle)))
+     || (err = tuna_install_driver(&device->janitor)))
     { goto out; }
 
     *device_out = device; device = NULL;
