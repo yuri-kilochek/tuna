@@ -655,14 +655,18 @@ out:
 
 static
 tuna_error
-tuna_install_driver(wchar_t const *janitor_path, wchar_t const *inf_path,
-                    HANDLE *janitor_handle_out)
-{
+tuna_install_driver(HANDLE *janitor_handle_out) {
+    wchar_t *janitor_path = NULL;
+    wchar_t *inf_path = NULL;
     HANDLE janitor_handle = INVALID_HANDLE_VALUE;
     //HDEVINFO dev_info = INVALID_HANDLE_VALUE;
     //_Bool registered = 0;
     
     tuna_error err = 0;
+
+    if ((err = tuna_ensure_extruded(&janitor_path, &inf_path))) {
+        goto out;
+    }
 
     //GUID class_guid;
     //wchar_t class_name[MAX_CLASS_NAME_LEN];
@@ -735,6 +739,8 @@ out:
     //if (dev_info != INVALID_HANDLE_VALUE) {
     //    SetupDiDestroyDeviceInfoList(dev_info);
     //}
+    free(janitor_path);
+    free(inf_path);
 
 
     return err;
@@ -763,25 +769,19 @@ tuna_allocate_device(tuna_device **device_out) {
 
 tuna_error
 tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
-    wchar_t *janitor_path = NULL;
-    wchar_t *driver_inf_path = NULL;
     tuna_device *device = NULL;
 
     tuna_error err = 0;
 
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
-     || (err = tuna_ensure_extruded(&janitor_path, &driver_inf_path))
      || (err = tuna_allocate_device(&device))
-     || (err = tuna_install_driver(janitor_path, driver_inf_path,
-                                   device->janitor_handle)))
+     || (err = tuna_install_driver(device->janitor_handle)))
     { goto out; }
 
     *device_out = device; device = NULL;
 
 out:
     tuna_free_device(device);
-    free(driver_inf_path);
-    free(janitor_path);
 
     return err;
 }
