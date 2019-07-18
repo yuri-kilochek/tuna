@@ -24,8 +24,8 @@
 #pragma warning(disable: 4996) // No, MSVC, C functions are not deprecated.
 
 typedef struct {
-    HANDLE handle;
-    HANDLE stdin_handle;
+    HANDLE process;
+    HANDLE detached_event;
 } tuna_janitor;
 
 //static
@@ -47,9 +47,12 @@ struct tuna_device {
 static
 void
 tuna_detach_janitor(tuna_janitor *janitor) {
-    if (janitor->handle != INVALID_HANDLE_VALUE) {
-        CloseHandle(janitor->stdin_handle);
-        CloseHandle(janitor->handle);
+    if (janitor->detached_event) {
+        SetEvent(janitor->detached_event);
+        CloseHandle(janitor->detached_event);
+    }
+    if (janitor->process) {
+        CloseHandle(janitor->process);
     }
 }
 
@@ -675,9 +678,80 @@ out:
 //static wchar_t const tuna_quote_prefix[] = L"tuna-quoted-";
 
 
-#define TUNA_JANITOR_INITIALIZER (tuna_janitor){ \
-    .handle = INVALID_HANDLE_VALUE, \
-    .stdin_handle = INVALID_HANDLE_VALUE, \
+#define TUNA_JANITOR_INITIALIZER (tuna_janitor){0}
+
+static
+tuna_error
+tuna_start_janitor(wchar_t const *path, wchar_t const *driver_instance_id,
+                   tuna_janitor *janitor_out)
+{
+    HANDLE current_process = NULL;
+    tuna_janitor janitor = TUNA_JANITOR_INITIALIZER;
+    HANDLE initialized_event = NULL;
+    wchar_t *command = NULL;
+
+    tuna_error err = 0;
+
+    if (!DuplicateHandle(GetCurrentProcess(), GetCurrentProcess(),
+                         GetCurrentProcess(), &current_process,
+                         0, TRUE, DUPLICATE_SAME_ACCESS))
+    {
+        current_process = NULL;
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    SECURITY_ATTRIBUTES security_attributes = {
+        .nLength = sizeof(security_attributes),
+        .bInheritHandle = TRUE,
+    };
+    if (!(janitor.detached_event = CreateEvent(&security_attributes,
+                                               TRUE, FALSE, NULL))
+     || !(initialized_event = CreateEvent(&security_attributes,
+                                          TRUE, FALSE, NULL)))
+    {
+    
+    }
+
+    //
+    //
+    // TODO: put path, driver_instance_id, janitor.detached_event, current_process and initialized_event
+    // into command, properly quoted
+    //
+    //
+
+    STARTUPINFOW startupinfo = {
+        .cb = sizeof(startupinfo),
+    };
+    PROCESS_INFORMATION process_information;
+    if (!CreateProcessW(NULL, command, NULL, NULL, TRUE, 0, NULL, NULL,
+                        &startupinfo, &process_information))
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+    janitor.process = process_information.hProcess;
+    CloseHandle(process_information.hThread);
+
+    //
+    //
+    // TODO: wait for initialized event and janitor process
+    //
+    //
+
+    *janitor_out = janitor; janitor = TUNA_JANITOR_INITIALIZER;
+
+out:
+    free(command);
+    if (initialized_event) {
+        CloseHandle(initialized_event);
+    }
+    tuna_detach_janitor(&janitor);
+    if (current_process) {
+        CloseHandle(current_process);
+    }
+
+    return err;
 }
 
 static
@@ -697,23 +771,37 @@ tuna_install_driver(tuna_janitor *janitor_out) {
 
     GUID class_guid;
     wchar_t class_name[MAX_CLASS_NAME_LEN + 1];
-    SP_DEVINFO_DATA dev_info_data = {
-        .cbSize = sizeof(dev_info_data),
-    };
-    wchar_t instance_id[MAX_DEVICE_ID_LEN + 1];
     if (!SetupDiGetINFClassW(inf_path,
                              &class_guid,
                              class_name, _countof(class_name),
-                             NULL)
-     || (dev_info = SetupDiCreateDeviceInfoList(&class_guid, NULL))
-            == INVALID_HANDLE_VALUE
-     || !SetupDiCreateDeviceInfoW(dev_info,
+                             NULL))
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    dev_info = SetupDiCreateDeviceInfoList(&class_guid, NULL);
+    if (dev_info == INVALID_HANDLE_VALUE) {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    SP_DEVINFO_DATA dev_info_data = {
+        .cbSize = sizeof(dev_info_data),
+    };
+    if (!SetupDiCreateDeviceInfoW(dev_info,
                                   class_name, &class_guid,
                                   NULL,
                                   NULL,
                                   DICD_GENERATE_ID,
-                                  &dev_info_data)
-     || !SetupDiGetDeviceInstanceIdW(dev_info,
+                                  &dev_info_data))
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    wchar_t instance_id[MAX_DEVICE_ID_LEN + 1];
+    if (!SetupDiGetDeviceInstanceIdW(dev_info,
                                      &dev_info_data,
                                      instance_id, _countof(instance_id),
                                      &(DWORD){0}))
@@ -722,7 +810,9 @@ tuna_install_driver(tuna_janitor *janitor_out) {
         goto out;
     }
 
-    fwprintf(stderr, L"\n\n\n\n------ instance_id: %s\n\n\n\n", instance_id);
+    if ((err = tuna_start_janitor(janitor_path, instance_id, &janitor))) {
+        goto out;
+    }
 
     //assert(wcslen(hardware_id) <= MAX_DEVICE_ID_LEN);
     //wchar_t hardware_ids[MAX_DEVICE_ID_LEN + 1 + 1];
