@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <assert.h>
+#include <inttypes.h>
+#include <stdarg.h>
 
 #include <windows.h>
 #include <shlobj.h>
@@ -677,6 +679,132 @@ out:
 //
 //static wchar_t const tuna_quote_prefix[] = L"tuna-quoted-";
 
+static
+tuna_error
+tuna_vaswprintf(wchar_t **result_out, wchar_t const *format, va_list args) {
+    va_list args2; va_copy(args2, args);
+    wchar_t *result = NULL;
+
+    tuna_error err = 0;
+
+    int length = _vscwprintf(format, args);
+    if (length < 0) {
+        err = TUNA_UNEXPECTED;
+        goto out;
+    }
+    
+    if (!(result = malloc((length + 1) * sizeof(*result)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    if (vswprintf(result, length + 1, format, args2) < 0) {
+        err = TUNA_UNEXPECTED;
+        goto out;
+    }
+
+    *result_out = result; result = NULL;
+
+out:
+    free(result);
+    va_end(args2);
+
+    return err;
+}
+
+static
+tuna_error
+tuna_aswprintf(wchar_t **result_out, wchar_t const *format, ...) {
+    va_list args;
+    va_start(args, format);
+    tuna_error err = tuna_vaswprintf(result_out, format, args);
+    va_end(args);
+    return err;
+}
+
+static
+tuna_error
+tuna_quote_command_arg(wchar_t const *raw, wchar_t **quoted_out) {
+    wchar_t *quoted = NULL;
+
+    tuna_error err = 0;
+
+    size_t max_length = 2  // Surrounding double quotation marks.
+                      + wcslen(raw) * 2;  // In the worst case every single
+                                          // char needs a leading backslash.
+    if (!(quoted = malloc((max_length + 1) * sizeof(*quoted)))) {
+        err = TUNA_OUT_OF_MEMORY;
+        goto out;
+    }
+
+    // https://docs.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments
+
+    size_t consecutive_backslash_count = 0; 
+    wchar_t *q = quoted;
+    *q++ = L'"';
+    for (wchar_t const *r = raw; *r; ++r) {
+        if (*r == L'\\') {
+            ++consecutive_backslash_count;
+        } else if (*r == L'"') {
+            while (consecutive_backslash_count-- > 0) {
+                *q++ = L'\\';
+            }
+            *q++ = L'\\';
+        } else {
+            consecutive_backslash_count = 0;
+        }
+        *q++ = *r;
+    }
+    while (consecutive_backslash_count-- > 0) {
+        *q++ = L'\\';
+    }
+    *q++ = L'"';
+    *q = L'\0';
+
+    *quoted_out = quoted; quoted = NULL;
+
+out:
+    free(quoted);
+
+    return err;
+}
+
+static
+tuna_error
+tuna_build_janitor_start_command(wchar_t const *path,
+                                 wchar_t const *driver_instance_id,
+                                 HANDLE this_process,
+                                 HANDLE detached_event,
+                                 HANDLE initialized_event,
+                                 wchar_t **command_out)
+{
+    wchar_t *quoted_path = NULL;
+    wchar_t *quoted_driver_instance_id = NULL;
+    wchar_t *command = NULL;
+
+    tuna_error err = 0;
+
+    if ((err = tuna_quote_command_arg(path, &quoted_path))
+     || (err = tuna_quote_command_arg(driver_instance_id,
+                                      &quoted_driver_instance_id))
+     || (err = tuna_aswprintf(&command,
+                              L"%s %s %"PRIuPTR" %"PRIuPTR" %"PRIuPTR,
+                              quoted_path,
+                              quoted_driver_instance_id,
+                              (uintptr_t)this_process,
+                              (uintptr_t)detached_event,
+                              (uintptr_t)initialized_event)))
+    { goto out; }
+
+    *command_out = command; command = NULL;
+
+out:
+    free(command);
+    free(quoted_driver_instance_id);
+    free(quoted_path);
+
+    return err;
+}
 
 #define TUNA_JANITOR_INITIALIZER (tuna_janitor){0}
 
@@ -685,7 +813,7 @@ tuna_error
 tuna_start_janitor(wchar_t const *path, wchar_t const *driver_instance_id,
                    tuna_janitor *janitor_out)
 {
-    HANDLE current_process = NULL;
+    HANDLE this_process = NULL;
     tuna_janitor janitor = TUNA_JANITOR_INITIALIZER;
     HANDLE initialized_event = NULL;
     wchar_t *command = NULL;
@@ -693,10 +821,10 @@ tuna_start_janitor(wchar_t const *path, wchar_t const *driver_instance_id,
     tuna_error err = 0;
 
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentProcess(),
-                         GetCurrentProcess(), &current_process,
+                         GetCurrentProcess(), &this_process,
                          0, TRUE, DUPLICATE_SAME_ACCESS))
     {
-        current_process = NULL;
+        this_process = NULL;
         err = tuna_translate_sys_error(GetLastError());
         goto out;
     }
@@ -710,15 +838,20 @@ tuna_start_janitor(wchar_t const *path, wchar_t const *driver_instance_id,
      || !(initialized_event = CreateEvent(&security_attributes,
                                           TRUE, FALSE, NULL)))
     {
-    
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
     }
 
-    //
-    //
-    // TODO: put path, driver_instance_id, janitor.detached_event, current_process and initialized_event
-    // into command, properly quoted
-    //
-    //
+    if ((err = tuna_build_janitor_start_command(path,
+                                                driver_instance_id,
+                                                this_process,
+                                                janitor.detached_event,
+                                                initialized_event,
+                                                &command)))
+    { goto out; }
+
+    fwprintf(stderr, L"%s", command);
+    exit(0);
 
     STARTUPINFOW startupinfo = {
         .cb = sizeof(startupinfo),
@@ -747,8 +880,8 @@ out:
         CloseHandle(initialized_event);
     }
     tuna_detach_janitor(&janitor);
-    if (current_process) {
-        CloseHandle(current_process);
+    if (this_process) {
+        CloseHandle(this_process);
     }
 
     return err;
