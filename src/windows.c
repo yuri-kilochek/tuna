@@ -769,6 +769,8 @@ out:
     return err;
 }
 
+#define TUNA_JANITOR_INITIALIZER (tuna_janitor){0}
+
 static
 tuna_error
 tuna_build_janitor_start_command(wchar_t const *path,
@@ -805,8 +807,6 @@ out:
 
     return err;
 }
-
-#define TUNA_JANITOR_INITIALIZER (tuna_janitor){0}
 
 static
 tuna_error
@@ -850,9 +850,6 @@ tuna_start_janitor(wchar_t const *path, wchar_t const *driver_instance_id,
                                                 &command)))
     { goto out; }
 
-    fwprintf(stderr, L"%s", command);
-    exit(0);
-
     STARTUPINFOW startupinfo = {
         .cb = sizeof(startupinfo),
     };
@@ -866,11 +863,22 @@ tuna_start_janitor(wchar_t const *path, wchar_t const *driver_instance_id,
     janitor.process = process_information.hProcess;
     CloseHandle(process_information.hThread);
 
-    //
-    //
-    // TODO: wait for initialized event and janitor process
-    //
-    //
+    HANDLE awaited[] = {
+        initialized_event,
+        janitor.process,
+    };
+    switch (WaitForMultipleObjects(_countof(awaited), awaited,
+                                   FALSE, INFINITE))
+    {
+    case WAIT_OBJECT_0:
+        break;
+    case WAIT_FAILED:
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    default:
+        err = TUNA_UNEXPECTED;
+        goto out;
+    }
 
     *janitor_out = janitor; janitor = TUNA_JANITOR_INITIALIZER;
 
