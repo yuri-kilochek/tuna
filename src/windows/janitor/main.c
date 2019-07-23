@@ -59,10 +59,7 @@ tuna_open_driver_instance(wchar_t const *driver_instance_id,
     devinfo_data->cbSize = sizeof(*devinfo_data);
     if (!SetupDiOpenDeviceInfoW(*devinfo, driver_instance_id, NULL, 0,
                                 devinfo_data))
-    {
-        printf("\n\n\n ---- FUCK %u\n\n\n", GetLastError());
-        ExitProcess(GetLastError());
-    }
+    { ExitProcess(GetLastError()); }
 }
 
 int main(void) {
