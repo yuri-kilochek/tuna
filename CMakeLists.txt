@@ -50,7 +50,7 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL Linux)
 endif()
 if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     add_subdirectory(deps/tap-windows)
-    _tuna_embed_tap_windows(tuna tuna_priv_embedded_driver)
+    _tuna_embed_tap_windows(tuna)
 
     add_subdirectory(src/windows/janitor)
     _tuna_embed_janitor(tuna)

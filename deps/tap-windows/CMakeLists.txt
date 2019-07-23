@@ -87,11 +87,11 @@ if(NOT ("${_TUNA_TAP_WINDOWS_CACHE_TAG}" STREQUAL "${CACHE_TAG}"))
     set(_TUNA_TAP_WINDOWS_CACHE_TAG "${CACHE_TAG}" CACHE INTERNAL "")
 endif()
 
-function(_tuna_embed_tap_windows TARGET VAR)
+function(_tuna_embed_tap_windows TARGET)
     target_include_directories("${TARGET}" PRIVATE
         "${_TUNA_TAP_WINDOWS_INCLUDE_DIR}"
     )
-    _tuna_embed_driver("${TARGET}" "${VAR}"
+    _tuna_embed_driver("${TARGET}" tuna_priv_embedded_tap_windows
         "${_TUNA_TAP_WINDOWS_HARDWARE_ID}"
         "${_TUNA_TAP_WINDOWS_INF}"
         "${_TUNA_TAP_WINDOWS_CAT}"

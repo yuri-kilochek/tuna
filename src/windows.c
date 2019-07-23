@@ -198,7 +198,7 @@ tuna_extrude_janitor(wchar_t const *dir, int dry_run, wchar_t **path_out) {
                              path_out);
 }
 
-extern tuna_embedded_driver const tuna_priv_embedded_driver;
+extern tuna_embedded_driver const tuna_priv_embedded_tap_windows;
 
 static
 tuna_error
@@ -207,7 +207,7 @@ tuna_extrude_driver(wchar_t const *dir, int dry_run, wchar_t **inf_path_out) {
 
     tuna_error err = 0;
 
-    tuna_embedded_driver const *embedded = &tuna_priv_embedded_driver;
+    tuna_embedded_driver const *embedded = &tuna_priv_embedded_tap_windows;
     if ((err = tuna_extrude_file(embedded->inf_file, dir, dry_run, &inf_path))
      || (err = tuna_extrude_file(embedded->cat_file, dir, dry_run, NULL))
      || (err = tuna_extrude_file(embedded->sys_file, dir, dry_run, NULL)))
@@ -960,7 +960,7 @@ tuna_install_driver(tuna_janitor *janitor_out) {
     }
 
     wchar_t hardware_ids[MAX_DEVICE_ID_LEN + 2];
-    wcscpy(hardware_ids, tuna_priv_embedded_driver.hardware_id);
+    wcscpy(hardware_ids, tuna_priv_embedded_tap_windows.hardware_id);
     hardware_ids[wcslen(hardware_ids) + 1] = L'\0';
     if (!SetupDiSetDeviceRegistryPropertyW(devinfo, &devinfo_data,
                                            SPDRP_HARDWAREID,
@@ -977,6 +977,14 @@ tuna_install_driver(tuna_janitor *janitor_out) {
         goto out;
     }
     must_remove = 0;
+
+    //
+    //
+    // TODO: UpdateDriverForPlugAndPlayDevicesW distrupts all devices with the
+    // same hardware id, so temporary change hardware ids of all such devices
+    // for the duration fof this call
+    //
+    //
 
     BOOL need_reboot;
     if (!UpdateDriverForPlugAndPlayDevicesW(NULL,
@@ -1038,6 +1046,13 @@ tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
      || (err = tuna_allocate_device(&device))
      || (err = tuna_install_driver(&device->janitor)))
     { goto out; }
+
+    //
+    //
+    // TODO: return driver_instance_id from tuna_install_driver somehow
+    // and find it's NetCfgInstanceId via registry to contruct device file path.
+    //
+    //
 
     *device_out = device; device = NULL;
 
