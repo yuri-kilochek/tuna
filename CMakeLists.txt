@@ -20,9 +20,9 @@ set(HEADER_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in")
 set(HEADER "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h")
 set(HEADER_GENERATOR "${CMAKE_CURRENT_BINARY_DIR}/tuna.h.generator.cmake")
 _tuna_write_file_if_changed("${HEADER_GENERATOR}"
-    "set(MAJOR_VERSION ${PROJECT_VERSION_MAJOR})\n"
-    "set(MINOR_VERSION ${PROJECT_VERSION_MINOR})\n"
-    "set(PATCH_VERSION ${PROJECT_VERSION_PATCH})\n"
+    "set(VERSION_MAJOR ${PROJECT_VERSION_MAJOR})\n"
+    "set(VERSION_MINOR ${PROJECT_VERSION_MINOR})\n"
+    "set(VERSION_PATCH ${PROJECT_VERSION_PATCH})\n"
     "configure_file(\"${HEADER_TEMPLATE}\" \"${HEADER}\")\n"
 )
 add_custom_command(

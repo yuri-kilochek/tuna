@@ -10,15 +10,15 @@
 
 int main() {
     std::cout << "included version: "
-              << TUNA_MAJOR_VERSION << "." 
-              << TUNA_MINOR_VERSION << "." 
-              << TUNA_PATCH_VERSION << "\n";
+              << TUNA_VERSION_MAJOR << "." 
+              << TUNA_VERSION_MINOR << "." 
+              << TUNA_VERSION_PATCH << "\n";
     {
         tuna_version v = tuna_get_version();
         std::cout << "linked version: "
-                  << TUNA_GET_MAJOR_VERSION(v) << "." 
-                  << TUNA_GET_MINOR_VERSION(v) << "." 
-                  << TUNA_GET_PATCH_VERSION(v) << "\n";
+                  << TUNA_GET_VERSION_MAJOR(v) << "." 
+                  << TUNA_GET_VERSION_MINOR(v) << "." 
+                  << TUNA_GET_VERSION_PATCH(v) << "\n";
     }
 
     tuna_device *device_a;

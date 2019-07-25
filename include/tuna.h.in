@@ -44,28 +44,27 @@ extern "C" {
 
 ///////////////////////////////////////////////////////////////////////////////
 
-#define TUNA_MAJOR_VERSION ${MAJOR_VERSION}
-#define TUNA_MINOR_VERSION ${MINOR_VERSION}
-#define TUNA_PATCH_VERSION ${PATCH_VERSION}
-
 typedef uint_least32_t tuna_version;
 
 #define TUNA_COMPOSE_VERSION(major, minor, patch) \
     ((major) << UINT32_C(20) | (minor) << UINT32_C(10) | (patch))
 
-#define TUNA_VERSION TUNA_COMPOSE_VERSION(TUNA_MAJOR_VERSION, \
-                                          TUNA_MINOR_VERSION, \
-                                          TUNA_PATCH_VERSION)
+#define TUNA_VERSION_MAJOR ${VERSION_MAJOR}
+#define TUNA_VERSION_MINOR ${VERSION_MINOR}
+#define TUNA_VERSION_PATCH ${VERSION_PATCH}
+#define TUNA_VERSION TUNA_COMPOSE_VERSION(TUNA_VERSION_MAJOR, \
+                                          TUNA_VERSION_MINOR, \
+                                          TUNA_VERSION_PATCH)
 
 TUNA_PRIV_API
 tuna_version
 tuna_get_version(void);
 
-#define TUNA_GET_MAJOR_VERSION(version) \
+#define TUNA_GET_VERSION_MAJOR(version) \
     ((version) >> UINT32_C(20))
-#define TUNA_GET_MINOR_VERSION(version) \
+#define TUNA_GET_VERSION_MINOR(version) \
     ((version) >> UINT32_C(10) & UINT32_C(0x3FF))
-#define TUNA_GET_PATCH_VERSION(version) \
+#define TUNA_GET_VERSION_PATCH(version) \
     ((version) & UINT32_C(0x3FF))
 
 ///////////////////////////////////////////////////////////////////////////////
