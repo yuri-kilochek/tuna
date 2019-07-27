@@ -905,8 +905,8 @@ tuna_discreetly_update_driver(SP_DEVINFO_DATA *devinfo_data,
 {
     wchar_t *quoted_hardware_id = NULL;
     wchar_t *mutex_name = NULL;
-    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
     HANDLE mutex = NULL;
+    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
 
     tuna_error err = 0;
 
@@ -945,8 +945,10 @@ tuna_discreetly_update_driver(SP_DEVINFO_DATA *devinfo_data,
     }
 
 out:
-    tuna_replace_most_hardware_ids(devinfo, devinfo_data->DevInst,
-                                   quoted_hardware_id, hardware_id, 1);
+    if (quoted_hardware_id) {
+        tuna_replace_most_hardware_ids(devinfo, devinfo_data->DevInst,
+                                       quoted_hardware_id, hardware_id, 1);
+    }
     if (devinfo != INVALID_HANDLE_VALUE) {
         SetupDiDestroyDeviceInfoList(devinfo);
     }
