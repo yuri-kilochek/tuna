@@ -959,7 +959,9 @@ out:
 
 static
 tuna_error
-tuna_install_driver(tuna_janitor *janitor_out) {
+tuna_install_driver(HDEVINFO *devinfo_out, SP_DEVINFO_DATA *devinfo_data_out,
+                    tuna_janitor *janitor_out)
+{
     wchar_t *janitor_path = NULL;
     wchar_t *inf_path = NULL;
     HDEVINFO devinfo = INVALID_HANDLE_VALUE;
@@ -1035,6 +1037,8 @@ tuna_install_driver(tuna_janitor *janitor_out) {
     if ((err = tuna_discreetly_update_driver(&devinfo_data, inf_path)))
     { goto out; }
 
+    *devinfo_out = devinfo; devinfo = INVALID_HANDLE_VALUE;
+    *devinfo_data_out = devinfo_data;
     *janitor_out = janitor; janitor = TUNA_JANITOR_INITIALIZER;
 
 out:
@@ -1072,26 +1076,29 @@ tuna_allocate_device(tuna_device **device_out) {
 
 tuna_error
 tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
+    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
     tuna_device *device = NULL;
 
     tuna_error err = 0;
 
+    SP_DEVINFO_DATA devinfo_data;
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
      || (err = tuna_allocate_device(&device))
-     || (err = tuna_install_driver(&device->janitor)))
+     || (err = tuna_install_driver(&devinfo, &devinfo_data, &device->janitor)))
     { goto out; }
 
-    //
-    //
-    // TODO: return driver_instance_id from tuna_install_driver somehow
-    // and find it's NetCfgInstanceId via registry to contruct device file path.
-    //
-    //
+
+
+
+
 
     *device_out = device; device = NULL;
 
 out:
     tuna_free_device(device);
+    if (devinfo != INVALID_HANDLE_VALUE) {
+        SetupDiDestroyDeviceInfoList(devinfo);
+    }
 
     return err;
 }
