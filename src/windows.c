@@ -1055,6 +1055,107 @@ out:
     return err;
 }
 
+#define TUNA_GUID_STRING_LENGTH \
+    (sizeof("{00000000-0000-0000-0000-000000000000}") - 1)
+
+static
+tuna_error
+tuna_get_net_cfg_instance_id(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
+                             wchar_t *net_cfg_instance_id_out)
+{
+    HKEY regkey = INVALID_HANDLE_VALUE;
+    
+    tuna_error err = 0;
+    DWORD err_code;
+
+    regkey = SetupDiOpenDevRegKey(devinfo, devinfo_data,
+                                  DICS_FLAG_GLOBAL, 0, DIREG_DRV, KEY_READ);
+    if (regkey == INVALID_HANDLE_VALUE) {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    wchar_t net_cfg_instance_id[TUNA_GUID_STRING_LENGTH + 1];
+    if ((err_code = RegGetValueW(regkey, NULL, L"NetCfgInstanceId",
+                                 RRF_RT_REG_SZ, NULL, net_cfg_instance_id,
+                                 &(DWORD){sizeof(net_cfg_instance_id)})))
+    {
+        err = tuna_translate_sys_error(err_code);
+        goto out;
+    }
+
+    memcpy(net_cfg_instance_id_out, net_cfg_instance_id,
+           sizeof(net_cfg_instance_id));
+
+out:
+    if (regkey != INVALID_HANDLE_VALUE) {
+        RegCloseKey(regkey);
+    }
+
+    return err;
+}
+
+static
+tuna_error
+tuna_get_device_file_path(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
+                          wchar_t **path_out)
+{
+    wchar_t *path = NULL;
+
+    tuna_error err = 0;
+
+    wchar_t net_cfg_instance_id[TUNA_GUID_STRING_LENGTH + 1];
+    if ((err = tuna_get_net_cfg_instance_id(devinfo, devinfo_data,
+                                            net_cfg_instance_id))
+     || (err = tuna_aswprintf(&path, L"\\\\.\\Global\\%s.tap",
+                              net_cfg_instance_id)))
+    { goto out; }
+
+    *path_out = path; path = NULL;
+
+out:
+    free(path);
+
+    return err;
+}
+
+static
+tuna_error
+tuna_open_device_file(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
+                      HANDLE *handle_out)
+{
+    wchar_t *path = NULL;
+    HANDLE handle = INVALID_HANDLE_VALUE;
+
+    tuna_error err = 0;
+
+    if ((err = tuna_get_device_file_path(devinfo, devinfo_data, &path))) {
+        goto out;
+    }
+
+    if ((handle = CreateFileW(path,
+                              GENERIC_READ | GENERIC_WRITE,
+                              0, // TODO: check if sharing is possible
+                              NULL,
+                              OPEN_EXISTING,
+                              FILE_FLAG_OVERLAPPED,
+                              NULL)) == INVALID_HANDLE_VALUE)
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    *handle_out = handle; handle = INVALID_HANDLE_VALUE;
+
+out:
+    if (handle != INVALID_HANDLE_VALUE) {
+        CloseHandle(handle);
+    }
+    free(path);
+
+    return err;
+}
+
 #define TUNA_DEVICE_INITIALIZER (tuna_device){ \
     .janitor = TUNA_JANITOR_INITIALIZER, \
     .handle = INVALID_HANDLE_VALUE, \
@@ -1084,13 +1185,9 @@ tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
     SP_DEVINFO_DATA devinfo_data;
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
      || (err = tuna_allocate_device(&device))
-     || (err = tuna_install_driver(&devinfo, &devinfo_data, &device->janitor)))
+     || (err = tuna_install_driver(&devinfo, &devinfo_data, &device->janitor))
+     || (err = tuna_open_device_file(devinfo, &devinfo_data, &device->handle)))
     { goto out; }
-
-
-
-
-
 
     *device_out = device; device = NULL;
 
