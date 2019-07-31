@@ -17,6 +17,9 @@
 #include <cfgmgr32.h>
 #include <setupapi.h>
 #include <newdev.h>
+#include <winioctl.h>
+//#include <ifdef.h>  // for tuna_get_net_luid
+#include <inaddr.h>
 
 #include <tap-windows.h>
 
@@ -1036,8 +1039,9 @@ tuna_install_driver(HDEVINFO *devinfo_out, SP_DEVINFO_DATA *devinfo_data_out,
     }
     must_remove = 0;
 
-    if ((err = tuna_discreetly_update_driver(&devinfo_data, inf_path)))
-    { goto out; }
+    if ((err = tuna_discreetly_update_driver(&devinfo_data, inf_path))) {
+        goto out;
+    }
 
     *devinfo_out = devinfo; devinfo = INVALID_HANDLE_VALUE;
     *devinfo_data_out = devinfo_data;
@@ -1097,10 +1101,11 @@ out:
     return err;
 }
 
+
 static
 tuna_error
-tuna_get_device_file_path(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
-                          wchar_t **path_out)
+tuna_get_device_path(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
+                     wchar_t **path_out)
 {
     wchar_t *path = NULL;
 
@@ -1121,17 +1126,62 @@ out:
     return err;
 }
 
+//static
+//tuna_error
+//tuna_get_net_luid(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
+//                  NET_LUID *net_luid_out)
+//{
+//    HKEY regkey = INVALID_HANDLE_VALUE;
+//    
+//    tuna_error err = 0;
+//    DWORD err_code;
+//
+//    regkey = SetupDiOpenDevRegKey(devinfo, devinfo_data,
+//                                  DICS_FLAG_GLOBAL, 0, DIREG_DRV, KEY_READ);
+//    if (regkey == INVALID_HANDLE_VALUE) {
+//        err = tuna_translate_sys_error(GetLastError());
+//        goto out;
+//    }
+//
+//    DWORD if_type;
+//    DWORD net_luid_index;
+//    if ((err_code = RegGetValueW(regkey, NULL, L"*IfType",
+//                                 RRF_RT_DWORD, NULL, &if_type,
+//                                 &(DWORD){sizeof(if_type)}))
+//     || (err_code = RegGetValueW(regkey, NULL, L"NetLuidIndex",
+//                                 RRF_RT_DWORD, NULL, &net_luid_index,
+//                                 &(DWORD){sizeof(net_luid_index)})))
+//    {
+//        err = tuna_translate_sys_error(err_code);
+//        goto out;
+//    }
+//
+//    *net_luid_out = (NET_LUID){
+//        .Info = {
+//            .IfType = if_type,
+//            .NetLuidIndex = net_luid_index,
+//        },
+//    };
+//
+//out:
+//    if (regkey != INVALID_HANDLE_VALUE) {
+//        RegCloseKey(regkey);
+//    }
+//
+//    return err;
+//}
+
 static
 tuna_error
-tuna_open_device_file(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
-                      HANDLE *handle_out)
+tuna_open_device(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
+                 HANDLE *handle_out)
 {
     wchar_t *path = NULL;
     HANDLE handle = INVALID_HANDLE_VALUE;
 
     tuna_error err = 0;
 
-    if ((err = tuna_get_device_file_path(devinfo, devinfo_data, &path))) {
+    if ((err = tuna_get_device_path(devinfo, devinfo_data, &path))) {
         goto out;
     }
 
@@ -1142,6 +1192,35 @@ tuna_open_device_file(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
                               OPEN_EXISTING,
                               FILE_FLAG_OVERLAPPED,
                               NULL)) == INVALID_HANDLE_VALUE)
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    IN_ADDR addresses[] = {
+        {169, 254, 1, 0},
+        {169, 254, 0, 0},
+        {255, 255, 0, 0},
+    };
+    if (!DeviceIoControl(handle, TAP_WIN_IOCTL_CONFIG_TUN,
+                         addresses, sizeof(addresses),
+                         &(char){0}, 1, &(DWORD){0},
+                         NULL))
+    {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    //
+    //
+    // TODO: does the device start connected on linux? Mimic here.
+    //
+    //
+    ULONG status = 1;
+    if (!DeviceIoControl(handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
+                         &status, sizeof(status),
+                         &(char){0}, 1, &(DWORD){0},
+                         NULL))
     {
         err = tuna_translate_sys_error(GetLastError());
         goto out;
@@ -1188,7 +1267,7 @@ tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
      || (err = tuna_allocate_device(&device))
      || (err = tuna_install_driver(&devinfo, &devinfo_data, &device->janitor))
-     || (err = tuna_open_device_file(devinfo, &devinfo_data, &device->handle)))
+     || (err = tuna_open_device(devinfo, &devinfo_data, &device->handle)))
     { goto out; }
 
     *device_out = device; device = NULL;
