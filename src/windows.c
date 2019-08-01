@@ -1211,21 +1211,6 @@ tuna_open_device(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
         goto out;
     }
 
-    //
-    //
-    // TODO: does the device start connected on linux? Mimic here.
-    //
-    //
-    ULONG status = 1;
-    if (!DeviceIoControl(handle, TAP_WIN_IOCTL_SET_MEDIA_STATUS,
-                         &status, sizeof(status),
-                         &(char){0}, 1, &(DWORD){0},
-                         NULL))
-    {
-        err = tuna_translate_sys_error(GetLastError());
-        goto out;
-    }
-
     *handle_out = handle; handle = INVALID_HANDLE_VALUE;
 
 out:
