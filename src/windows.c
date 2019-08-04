@@ -47,6 +47,7 @@ typedef struct {
 
 struct tuna_device {
     tuna_janitor janitor;
+    wchar_t instance_id[MAX_DEVICE_ID_LEN + 1];
     HANDLE handle;
 };
 
@@ -965,7 +966,7 @@ out:
 static
 tuna_error
 tuna_install_driver(HDEVINFO *devinfo_out, SP_DEVINFO_DATA *devinfo_data_out,
-                    tuna_janitor *janitor_out)
+                    tuna_janitor *janitor_out, wchar_t *instance_id_out)
 {
     wchar_t *janitor_path = NULL;
     wchar_t *inf_path = NULL;
@@ -1046,6 +1047,7 @@ tuna_install_driver(HDEVINFO *devinfo_out, SP_DEVINFO_DATA *devinfo_data_out,
     *devinfo_out = devinfo; devinfo = INVALID_HANDLE_VALUE;
     *devinfo_data_out = devinfo_data;
     *janitor_out = janitor; janitor = TUNA_JANITOR_INITIALIZER;
+    wcscpy(instance_id_out, instance_id);
 
 out:
     tuna_detach_janitor(&janitor);
@@ -1187,7 +1189,11 @@ tuna_open_device(HDEVINFO devinfo, SP_DEVINFO_DATA *devinfo_data,
 
     if ((handle = CreateFileW(path,
                               GENERIC_READ | GENERIC_WRITE,
-                              0, // TODO: check if sharing is possible
+                              0, // TODO: Check if sharing is possible.
+                                 // The file can't be opened twice, even when
+                                 // FILE_SHARE_READ | FILE_SHARE_WRITE is
+                                 // specified, but the opened handle can be
+                                 // duplicated. Test if it is usable.
                               NULL,
                               OPEN_EXISTING,
                               FILE_FLAG_OVERLAPPED,
@@ -1251,7 +1257,8 @@ tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
     SP_DEVINFO_DATA devinfo_data;
     if ((ownership == TUNA_SHARED) && (err = TUNA_UNSUPPORTED)
      || (err = tuna_allocate_device(&device))
-     || (err = tuna_install_driver(&devinfo, &devinfo_data, &device->janitor))
+     || (err = tuna_install_driver(&devinfo, &devinfo_data, &device->janitor,
+                                   device->instance_id))
      || (err = tuna_open_device(devinfo, &devinfo_data, &device->handle)))
     { goto out; }
 
