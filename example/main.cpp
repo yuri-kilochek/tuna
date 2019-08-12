@@ -21,15 +21,25 @@ int main() {
                   << TUNA_GET_VERSION_PATCH(v) << "\n";
     }
 
-    tuna_device *device_a;
-    if (auto err = tuna_create_device(TUNA_EXCLUSIVE, &device_a)) {
-        std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
+    tuna_device_list *list = NULL;
+    if (auto err = tuna_get_device_list(&list)) {
+        std::cerr << "tuna_get_device_list failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
     BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_free_device(device_a);
+        tuna_free_device_list(list);
     };
-    std::cout << "created interface a" << std::flush;
+    std::cout << "found " << tuna_get_device_count(list) << " device(s)\n" << std::flush;
+
+    //tuna_device *device_a;
+    //if (auto err = tuna_create_device(TUNA_EXCLUSIVE, &device_a)) {
+    //    std::cerr << "tuna_open_device failed: " << tuna_get_error_name(err) << "\n";
+    //    return EXIT_FAILURE;
+    //}
+    //BOOST_SCOPE_EXIT_ALL(&) {
+    //    tuna_free_device(device_a);
+    //};
+    //std::cout << "created interface a" << std::flush;
 
     //char *name_a;
     //if (auto err = tuna_get_name(device_a, &name_a)) {

@@ -582,12 +582,12 @@ out:
 }
 
 struct tuna_address_list {
-    size_t address_count;
+    size_t address_count; // TODO: rename to count
     union {
         tuna_address_family family;
         tuna_ip4_address ip4;
         tuna_ip6_address ip6;
-    } addresses[];
+    } addresses[]; // TODO: rename to items
 };
 
 void
@@ -877,8 +877,8 @@ tuna_attach_device(tuna_device const *target, tuna_device **device_out) {
 }
 
 struct tuna_device_list {
-    size_t device_count;
-    tuna_device devices[];
+    size_t device_count; // TODO: rename to count
+    tuna_device devices[]; // TODO: rename to items
 };
 
 void
@@ -901,6 +901,7 @@ tuna_get_device_at(tuna_device_list const *list, size_t index) {
     return &list->devices[index];
 }
 
+// TODO: rename to tuna_load_managed_indices
 static
 int
 tuna_managed_rtnl_link_to_device(struct rtnl_link *rtnl_link,
@@ -934,6 +935,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
     }
 
     size_t count = 0;
+    // TODO: move loop into tuna_managed_rtnl_link_to_device
     for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
          nl_object; nl_object = nl_cache_get_next(nl_object))
     {
@@ -941,6 +943,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
         count += tuna_managed_rtnl_link_to_device(rtnl_link, NULL);
     }
 
+    // TODO: move into new tuna_allocate_device_list function
     if (!(list = malloc(sizeof(*list) + count * sizeof(*list->devices)))) {
         err = tuna_translate_sys_error(errno);
         goto out;
@@ -950,6 +953,7 @@ tuna_get_device_list(tuna_device_list **list_out) {
         list->devices[i] = TUNA_DEVICE_INITIALIZER;
     }
 
+    // TODO: move loop into tuna_managed_rtnl_link_to_device
     size_t i = 0;
     for (struct nl_object *nl_object = nl_cache_get_first(nl_cache);
          nl_object; nl_object = nl_cache_get_next(nl_object))

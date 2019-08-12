@@ -20,6 +20,7 @@
 #include <winioctl.h>
 //#include <ifdef.h>  // for tuna_get_net_luid
 #include <inaddr.h>
+#include <devguid.h>
 
 #include <tap-windows.h>
 
@@ -655,8 +656,8 @@ out:
 }
 
 typedef struct {
-    size_t string_count;
-    wchar_t **strings;
+    size_t string_count; // TODO: rename to count
+    wchar_t **strings; // TODO: rename to items
 } tuna_string_list;
 
 static
@@ -982,6 +983,7 @@ tuna_install_driver(HDEVINFO *devinfo_out, SP_DEVINFO_DATA *devinfo_data_out,
 
     GUID class_guid;
     wchar_t class_name[MAX_CLASS_NAME_LEN + 1];
+    // TODO: replace with GUID_DEVCLASS_NET & SetupDiClassNameFromGuidW 
     if (!SetupDiGetINFClassW(inf_path,
                              &class_guid,
                              class_name, _countof(class_name),
@@ -1266,6 +1268,150 @@ tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
 
 out:
     tuna_free_device(device);
+    if (devinfo != INVALID_HANDLE_VALUE) {
+        SetupDiDestroyDeviceInfoList(devinfo);
+    }
+
+    return err;
+}
+
+struct tuna_device_list {
+    size_t count;
+    tuna_device items[];
+};
+
+void
+tuna_free_device_list(tuna_device_list *list) {
+    if (list) {
+        for (size_t i = 0; i < list->count; ++i) {
+            tuna_deinitialize_device(&list->items[i]);
+        }
+        free(list);
+    }
+}
+
+size_t
+tuna_get_device_count(tuna_device_list const *list) {
+    return list->count;
+}
+
+tuna_device const *
+tuna_get_device_at(tuna_device_list const *list, size_t index) {
+    return &list->items[index];
+}
+
+static
+int
+tuna_string_list_contains(tuna_string_list const *list, wchar_t const *string)
+{
+    for (size_t i = 0; i < list->string_count; ++i) {
+        if (!wcscmp(list->strings[i], string)) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static
+tuna_error
+tuna_load_managed_instance_ids(HDEVINFO devinfo,
+                               size_t *device_count_out, tuna_device *devices) 
+{
+    tuna_string_list hardware_ids = TUNA_STRING_LIST_INITIALIZER;
+
+    tuna_error err = 0;
+
+    size_t device_count = 0;
+    for (DWORD i = 0;; ++i) {
+        SP_DEVINFO_DATA devinfo_data = {
+            .cbSize = sizeof(devinfo_data),
+        };
+        if (!SetupDiEnumDeviceInfo(devinfo, i, &devinfo_data)) {
+            DWORD err_code = GetLastError();
+            if (err_code == ERROR_NO_MORE_ITEMS) {
+                break;
+            }
+            err = tuna_translate_sys_error(err_code);
+            goto out;
+        }
+
+        tuna_deinitialize_string_list(&hardware_ids);
+        hardware_ids = TUNA_STRING_LIST_INITIALIZER;
+        if ((err = tuna_get_multi_sz_property(devinfo, &devinfo_data,
+                                              SPDRP_HARDWAREID,
+                                              &hardware_ids)))
+        { goto out; }
+
+        tuna_embedded_driver const *embedded = &tuna_priv_embedded_tap_windows;
+        if (!tuna_string_list_contains(&hardware_ids, embedded->hardware_id)) {
+            continue;
+        }
+
+        if (devices) {
+            tuna_device *device = &devices[device_count];
+            if (!SetupDiGetDeviceInstanceIdW(devinfo,
+                                             &devinfo_data,
+                                             device->instance_id,
+                                             _countof(device->instance_id),
+                                             &(DWORD){0}))
+            {
+                err = tuna_translate_sys_error(GetLastError());
+                goto out;
+            }
+        }
+
+        ++device_count;
+    }
+
+    if (device_count_out) {
+        *device_count_out = device_count;
+    }
+
+out:
+    tuna_deinitialize_string_list(&hardware_ids);
+
+    return err;
+}
+
+static
+tuna_error
+tuna_allocate_device_list(size_t count, tuna_device_list **list_out) {
+    tuna_device_list *list;
+    if (!(list = malloc(sizeof(*list) + count * sizeof(*list->items)))) {
+        return tuna_translate_sys_error(errno);
+    }
+    list->count = count;
+    for (size_t i = 0; i < count; ++i) {
+        list->items[i] = TUNA_DEVICE_INITIALIZER;
+    }
+    *list_out = list;
+    return 0;
+}
+
+tuna_error
+tuna_get_device_list(tuna_device_list **list_out) {
+    HDEVINFO devinfo = INVALID_HANDLE_VALUE;
+    tuna_device_list *list = NULL;
+
+    tuna_error err = 0;
+
+    devinfo = SetupDiGetClassDevsW(&GUID_DEVCLASS_NET, NULL, NULL,
+                                   DIGCF_PRESENT);
+    if (devinfo == INVALID_HANDLE_VALUE) {
+        err = tuna_translate_sys_error(GetLastError());
+        goto out;
+    }
+
+    size_t count;
+    if ((err = tuna_load_managed_instance_ids(devinfo, &count, NULL))
+     || (err = tuna_allocate_device_list(count, &list))
+     || (err = tuna_load_managed_instance_ids(devinfo, NULL, list->items)))
+    { goto out; }
+
+    *list_out = list; list = NULL;
+
+out:
+    tuna_free_device_list(list);
     if (devinfo != INVALID_HANDLE_VALUE) {
         SetupDiDestroyDeviceInfoList(devinfo);
     }
