@@ -1,8 +1,8 @@
-#include <tuna.h>
+#include <tuna/version.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
 tuna_version
-tuna_get_version(void) {
-    return TUNA_VERSION;
+tuna_get_runtime_version(void) {
+    return TUNA_HEADER_VERSION;
 }

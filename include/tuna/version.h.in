@@ -1,0 +1,40 @@
+#ifndef TUNA_PRIV_INCLUDE_GUARD_VERSION
+#define TUNA_PRIV_INCLUDE_GUARD_VERSION
+
+#include <tuna/api.h>
+
+#include <stdint.h>
+
+///////////////////////////////////////////////////////////////////////////////
+
+typedef uint_least32_t tuna_version;
+
+#define TUNA_MAKE_VERSION(major, minor, patch) \
+    (((major) & UINT32_C(0xFFF)) << UINT32_C(20) | \
+     ((minor) & UINT32_C(0x3FF)) << UINT32_C(10) | \
+     ((patch) & UINT32_C(0x3FF))) \
+/**/
+
+#define TUNA_HEADER_VERSION \
+    TUNA_MAKE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION}) \
+/**/
+
+TUNA_PRIV_API
+tuna_version
+tuna_get_runtime_version(void);
+
+#define TUNA_GET_MAJOR_VERSION(version) \
+    (((version) >> UINT32_C(20)) & UINT32_C(0xFFF)) \
+/**/
+
+#define TUNA_GET_MINOR_VERSION(version) \
+    (((version) >> UINT32_C(10)) & UINT32_C(0x3FF)) \
+/**/
+
+#define TUNA_GET_PATCH_VERSION(version) \
+    ((version) & UINT32_C(0x3FF)) \
+/**/
+
+///////////////////////////////////////////////////////////////////////////////
+
+#endif
