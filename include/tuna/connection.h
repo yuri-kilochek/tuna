@@ -9,7 +9,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-typedef uint_fast8_t tuna_connection;
+typedef uint_least8_t tuna_connection;
 #define TUNA_DISCONNECTED UINT8_C(0)
 #define TUNA_CONNECTED    UINT8_C(1)
 

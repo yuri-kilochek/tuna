@@ -9,7 +9,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-typedef uint_fast8_t tuna_ownership;
+typedef uint_least8_t tuna_ownership;
 #define TUNA_EXCLUSIVE UINT8_C(0)
 #define TUNA_SHARED    UINT8_C(1)
 

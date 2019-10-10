@@ -15,14 +15,6 @@ typedef uint_least32_t tuna_version;
      ((patch) & UINT32_C(0x3FF))) \
 /**/
 
-#define TUNA_HEADER_VERSION \
-    TUNA_MAKE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION}) \
-/**/
-
-TUNA_PRIV_API
-tuna_version
-tuna_get_runtime_version(void);
-
 #define TUNA_GET_MAJOR_VERSION(version) \
     (((version) >> UINT32_C(20)) & UINT32_C(0xFFF)) \
 /**/
@@ -34,6 +26,14 @@ tuna_get_runtime_version(void);
 #define TUNA_GET_PATCH_VERSION(version) \
     ((version) & UINT32_C(0x3FF)) \
 /**/
+
+#define TUNA_HEADER_VERSION \
+    TUNA_MAKE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION}) \
+/**/
+
+TUNA_PRIV_API
+tuna_version
+tuna_get_runtime_version(void);
 
 ///////////////////////////////////////////////////////////////////////////////
 

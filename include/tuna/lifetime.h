@@ -9,7 +9,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-typedef uint_fast8_t tuna_lifetime;
+typedef uint_least8_t tuna_lifetime;
 #define TUNA_TRANSIENT  UINT8_C(0)
 #define TUNA_PERSISTENT UINT8_C(1)
 

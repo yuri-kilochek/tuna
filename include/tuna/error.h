@@ -8,7 +8,6 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef uint_fast8_t tuna_error;
-
 #define TUNA_UNEXPECTED       UINT8_C( 1)
 #define TUNA_UNSUPPORTED      UINT8_C( 2)
 #define TUNA_DEVICE_LOST      UINT8_C( 3)

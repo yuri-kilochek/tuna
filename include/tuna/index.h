@@ -9,11 +9,11 @@
 
 TUNA_PRIV_API
 tuna_error
-tuna_get_index(tuna_ref const *ref, unsigned int *index_out);
+tuna_get_index(tuna_ref const *ref, unsigned *index_out);
 
 TUNA_PRIV_API
 tuna_error
-tuna_bind_by_index(tuna_ref *ref, unsigned int index);
+tuna_bind_by_index(tuna_ref *ref, unsigned index);
 
 ///////////////////////////////////////////////////////////////////////////////
 
