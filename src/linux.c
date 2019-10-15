@@ -16,48 +16,6 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
-struct tuna_device {
-    int index;
-    int fd;
-};
-
-static
-void
-tuna_deinitialize_device(tuna_device *device) {
-    if (device->fd != -1) {
-        close(device->fd);
-    }
-}
-
-void
-tuna_free_device(tuna_device *device) {
-    if (device) {
-        tuna_deinitialize_device(device);
-        free(device);
-    }
-}
-
-static
-tuna_error
-tuna_translate_nl_error(int err) {
-    switch (err) {
-    case 0:
-        return 0;
-    default:
-        return TUNA_UNEXPECTED;
-    case NLE_NODEV:
-    case NLE_OBJ_NOTFOUND:
-        return TUNA_DEVICE_LOST;
-    case NLE_PERM:
-    case NLE_NOACCESS:
-        return TUNA_FORBIDDEN;
-    case NLE_NOMEM:
-        return TUNA_OUT_OF_MEMORY;
-    case NLE_BUSY:
-        return TUNA_DEVICE_BUSY;
-    }
-}
-
 static
 tuna_error
 tuna_get_raw_rtnl_link_via(struct nl_sock *nl_sock, int index,
@@ -181,31 +139,6 @@ tuna_error
 tuna_get_lifetime(tuna_device const *device, tuna_lifetime *lifetime_out) {
     return tuna_get_raw_rtnl_link(device->index,
                                   tuna_get_lifetime_callback, lifetime_out);
-}
-
-static
-tuna_error
-tuna_translate_sys_error(int errnum) {
-    switch (errnum) {
-    case 0:
-        return 0;
-    default:
-        return TUNA_UNEXPECTED;
-    case ENXIO:
-    case ENODEV:
-        return TUNA_DEVICE_LOST;
-    case EPERM:
-    case EACCES:
-        return TUNA_FORBIDDEN;
-    case ENOMEM:
-    case ENOBUFS:
-        return TUNA_OUT_OF_MEMORY;
-    case EMFILE:
-    case ENFILE:
-        return TUNA_TOO_MANY_HANDLES;
-    case EBUSY:
-        return TUNA_DEVICE_BUSY;
-    }
 }
 
 tuna_error
@@ -684,24 +617,6 @@ out:
     nl_socket_free(nl_sock);
 
     return err;
-}
-
-#define TUNA_DEVICE_INITIALIZER (tuna_device){ \
-    .fd = -1, \
-}
-
-static
-tuna_error
-tuna_allocate_device(tuna_device **device_out) {
-    tuna_device *device;
-    if (!(device = malloc(sizeof(*device)))) {
-        return tuna_translate_sys_error(errno);
-    }
-    *device = TUNA_DEVICE_INITIALIZER;
-
-    *device_out = device;
-
-    return 0;
 }
 
 static

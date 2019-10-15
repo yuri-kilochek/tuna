@@ -16,13 +16,13 @@ if("${BUILD_SHARED_LIBS}")
     target_compile_definitions(tuna PRIVATE TUNA_EXPORT INTERFACE TUNA_IMPORT)
 endif()
 
-set(HEADER_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/tuna.h.in")
-set(HEADER "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h")
-set(HEADER_GENERATOR "${CMAKE_CURRENT_BINARY_DIR}/tuna.h.generator.cmake")
+set(HEADER_TEMPLATE "${CMAKE_CURRENT_SOURCE_DIR}/include/tuna/version.h.in")
+set(HEADER "${CMAKE_CURRENT_BINARY_DIR}/include/tuna/version.h")
+set(HEADER_GENERATOR "${CMAKE_CURRENT_BINARY_DIR}/tuna/version.h.generator.cmake")
 _tuna_write_file_if_changed("${HEADER_GENERATOR}"
-    "set(VERSION_MAJOR ${PROJECT_VERSION_MAJOR})\n"
-    "set(VERSION_MINOR ${PROJECT_VERSION_MINOR})\n"
-    "set(VERSION_PATCH ${PROJECT_VERSION_PATCH})\n"
+    "set(MAJOR_VERSION ${PROJECT_VERSION_MAJOR})\n"
+    "set(MINOR_VERSION ${PROJECT_VERSION_MINOR})\n"
+    "set(PATCH_VERSION ${PROJECT_VERSION_PATCH})\n"
     "configure_file(\"${HEADER_TEMPLATE}\" \"${HEADER}\")\n"
 )
 add_custom_command(
@@ -35,12 +35,17 @@ target_sources(tuna PRIVATE "${HEADER}")
 target_include_directories(tuna
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
     PRIVATE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    PRIVATE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>"
 )
 
 target_sources(tuna PRIVATE
     src/version.c
     src/error.c
-    $<$<PLATFORM_ID:Linux>:src/linux.c>
+
+    $<$<PLATFORM_ID:Linux>:src/linux/error.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/index.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/ref.c>
+
     $<$<PLATFORM_ID:Windows>:src/windows.c>
 )
 

@@ -25,7 +25,7 @@ size_t
 tuna_get_address_count(tuna_address_list const *list);
 
 TUNA_PRIV_API
-tuna_address const *
+tuna_address
 tuna_get_address_at(tuna_address_list const *list, size_t position);
 
 ///////////////////////////////////////////////////////////////////////////////

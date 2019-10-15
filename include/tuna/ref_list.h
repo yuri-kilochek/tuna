@@ -24,8 +24,9 @@ size_t
 tuna_get_ref_count(tuna_ref_list const *list);
 
 TUNA_PRIV_API
-tuna_ref const *
-tuna_get_ref_at(tuna_ref_list const *list, size_t position);
+tuna_error
+tuna_bind_like_at(tuna_ref *ref,
+                  tuna_ref_list const *example_list, size_t example_position);
 
 ///////////////////////////////////////////////////////////////////////////////
 

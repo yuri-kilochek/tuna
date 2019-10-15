@@ -8,8 +8,8 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
-tuna_error
-tuna_get_index(tuna_ref const *ref, unsigned *index_out);
+unsigned
+tuna_get_index(tuna_ref const *ref);
 
 TUNA_PRIV_API
 tuna_error
