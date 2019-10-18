@@ -2,19 +2,19 @@
 #define TUNA_PRIV_INCLUDE_GUARD
 
 #include <tuna/version.h>
+#include <tuna/api.h>
 #include <tuna/error.h>
 #include <tuna/ref.h>
 #include <tuna/ref_list.h>
-#include <tuna/index.h>
-#include <tuna/name.h>
 #include <tuna/ownership.h>
 #include <tuna/lifetime.h>
+#include <tuna/index.h>
+#include <tuna/name.h>
 #include <tuna/mtu.h>
 #include <tuna/address.h>
 #include <tuna/address_list.h>
-#include <tuna/io_handle.h>
 #include <tuna/connection.h>
-#include <tuna/api.h>
+#include <tuna/io_handle.h>
 
 #include <stdint.h>
 

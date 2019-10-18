@@ -1,4 +1,4 @@
-#include <tuna/error.h>
+#include <tuna/priv.h>
 
 #include <stddef.h>
 

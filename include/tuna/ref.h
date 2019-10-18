@@ -1,8 +1,8 @@
 #ifndef TUNA_PRIV_INCLUDE_GUARD_REF
 #define TUNA_PRIV_INCLUDE_GUARD_REF
 
-#include <tuna/error.h>
 #include <tuna/api.h>
+#include <tuna/error.h>
 
 #include <stdint.h>
 

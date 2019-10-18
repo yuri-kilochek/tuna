@@ -1,9 +1,9 @@
 #ifndef TUNA_PRIV_INCLUDE_GUARD_CONNECTION
 #define TUNA_PRIV_INCLUDE_GUARD_CONNECTION
 
+#include <tuna/api.h>
 #include <tuna/error.h>
 #include <tuna/ref.h>
-#include <tuna/api.h>
 
 #include <stdint.h>
 

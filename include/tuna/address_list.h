@@ -1,10 +1,10 @@
 #ifndef TUNA_PRIV_INCLUDE_GUARD_ADDRESS_LIST
 #define TUNA_PRIV_INCLUDE_GUARD_ADDRESS_LIST
 
+#include <tuna/api.h>
 #include <tuna/error.h>
 #include <tuna/ref.h>
 #include <tuna/address.h>
-#include <tuna/api.h>
 
 #include <stddef.h>
 

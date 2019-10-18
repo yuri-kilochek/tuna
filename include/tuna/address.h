@@ -1,9 +1,9 @@
 #ifndef TUNA_PRIV_INCLUDE_GUARD_ADDRESS
 #define TUNA_PRIV_INCLUDE_GUARD_ADDRESS
 
+#include <tuna/api.h>
 #include <tuna/error.h>
 #include <tuna/ref.h>
-#include <tuna/api.h>
 
 #include <stdint.h>
 
