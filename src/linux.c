@@ -10,8 +10,6 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 
-#include <netlink/route/addr.h>
-
 ///////////////////////////////////////////////////////////////////////////////
 
 static
