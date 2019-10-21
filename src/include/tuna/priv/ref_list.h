@@ -12,6 +12,9 @@ struct tuna_ref_list {
     tuna_ref *items[];
 };
 
+int
+tuna_allocate_ref_list(size_t count, tuna_ref_list **list_out);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

@@ -4,6 +4,18 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+int
+tuna_allocate_address_list(size_t count, tuna_address_list **list_out) {
+    tuna_address_list *list;
+    if (!(list = malloc(sizeof(*list) + count * sizeof(*list->items)))) {
+        return tuna_translate_sys_error(errno);
+    }
+
+    list->count = count;
+
+    return 0;
+}
+
 TUNA_PRIV_API
 void
 tuna_free_address_list(tuna_address_list *list) {

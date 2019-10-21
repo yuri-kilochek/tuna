@@ -12,6 +12,9 @@ struct tuna_address_list {
     tuna_address items[];
 };
 
+int
+tuna_allocate_address_list(size_t count, tuna_address_list **list_out);
+
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif

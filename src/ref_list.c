@@ -4,6 +4,21 @@
 
 ///////////////////////////////////////////////////////////////////////////////
 
+int
+tuna_allocate_ref_list(size_t count, tuna_ref_list **list_out) {
+    tuna_ref_list *list;
+    if (!(list = malloc(sizeof(*list) + count * sizeof(*list->items)))) {
+        return tuna_translate_sys_error(errno);
+    }
+
+    list->count = count;
+    for (size_t i = 0; i < count; ++i) {
+        list->items[i] = NULL;
+    }
+
+    return 0;
+}
+
 TUNA_PRIV_API
 void
 tuna_free_ref_list(tuna_ref_list *list) {
