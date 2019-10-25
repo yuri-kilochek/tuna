@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include <string.h>
+#include <assert.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -56,6 +57,8 @@ tuna_rtnl_addr_cache_to_address_list(int index, struct nl_cache *nl_cache,
 TUNA_PRIV_API
 tuna_error
 tuna_get_address_list(tuna_ref const *ref, tuna_address_list **list_out) {
+    assert(tuna_is_bound(ref));
+
     struct nl_sock *nl_sock = NULL;
     struct nl_cache *nl_cache = NULL;
     tuna_address_list *list = NULL;

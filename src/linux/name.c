@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include <unistd.h>
 #include <net/if.h>
@@ -12,6 +13,8 @@
 TUNA_PRIV_API
 tuna_error
 tuna_set_name(tuna_ref *ref, char const *name) {
+    assert(tuna_is_bound(ref));
+
     struct nl_sock *nl_sock = NULL;
     struct rtnl_link *rtnl_link = NULL;
     struct rtnl_link *rtnl_link_changes = NULL;
@@ -68,6 +71,8 @@ out:
 TUNA_PRIV_API
 tuna_error
 tuna_get_name(tuna_ref const *ref, char **name_out) {
+    assert(tuna_is_bound(ref));
+
     char *name = NULL;
 
     int err = 0;

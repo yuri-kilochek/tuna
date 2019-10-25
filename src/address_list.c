@@ -13,6 +13,8 @@ tuna_allocate_address_list(size_t count, tuna_address_list **list_out) {
 
     list->count = count;
 
+    *list_out = list;
+
     return 0;
 }
 

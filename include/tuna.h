@@ -22,10 +22,6 @@
 
 TUNA_PRIV_API
 tuna_error
-tuna_create(tuna_ref *ref, tuna_ownership ownership);
-
-TUNA_PRIV_API
-tuna_error
 tuna_open(tuna_ref *ref);
 
 TUNA_PRIV_API

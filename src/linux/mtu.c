@@ -1,10 +1,14 @@
 #include <tuna/priv/linux.h>
 
+#include <assert.h>
+
 ///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
 tuna_error
 tuna_set_mtu(tuna_ref *ref, size_t mtu) {
+    assert(tuna_is_bound(ref));
+
     struct nl_sock *nl_sock = NULL;
     struct rtnl_link *rtnl_link = NULL;
     struct rtnl_link *rtnl_link_changes = NULL;
@@ -47,6 +51,8 @@ out:
 TUNA_PRIV_API
 tuna_error
 tuna_get_mtu(tuna_ref const *ref, size_t *mtu_out) {
+    assert(tuna_is_bound(ref));
+
     struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;

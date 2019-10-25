@@ -2,6 +2,8 @@
 
 #include <netlink/route/addr.h>
 
+#include <assert.h>
+
 ///////////////////////////////////////////////////////////////////////////////
 
 static
@@ -53,6 +55,8 @@ out:
 TUNA_PRIV_API
 tuna_error
 tuna_add_address(tuna_ref *ref, tuna_address address) {
+    assert(tuna_is_bound(ref));
+
     struct nl_sock *nl_sock = NULL;
     struct rtnl_addr *rtnl_addr = NULL;
 
@@ -77,6 +81,8 @@ out:
 TUNA_PRIV_API
 tuna_error
 tuna_remove_address(tuna_ref *ref, tuna_address address) {
+    assert(tuna_is_bound(ref));
+
     struct nl_sock *nl_sock = NULL;
     struct rtnl_addr *rtnl_addr = NULL;
 

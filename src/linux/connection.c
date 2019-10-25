@@ -4,11 +4,15 @@
 #include <linux/if.h>
 #include <linux/if_tun.h>
 
+#include <assert.h>
+
 ///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
 tuna_error
 tuna_set_connection(tuna_ref *ref, tuna_connection connection);
+    assert(tuna_is_open(ref));
+
     if (ioctl(ref->fd, TUNSETCARRIER, &(unsigned int){connection}) == -1) {
         return tuna_translate_sys_error(errno);
     }
@@ -18,6 +22,8 @@ tuna_set_connection(tuna_ref *ref, tuna_connection connection);
 TUNA_PRIV_API
 tuna_error
 tuna_get_connection(tuna_ref const *ref, tuna_connection *connection_out);
+    assert(tuna_is_bound(ref));
+
     struct rtnl_link *rtnl_link = NULL;
 
     int err = 0;

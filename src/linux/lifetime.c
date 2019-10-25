@@ -3,11 +3,15 @@
 #include <sys/ioctl.h>
 #include <linux/if_tun.h>
 
+#include <assert.h>
+
 ///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
 tuna_error
 tuna_set_lifetime(tuna_ref *ref, tuna_lifetime lifetime) {
+    assert(tuna_is_open(ref));
+
     if (ioctl(ref->fd, TUNSETPERSIST, (unsigned long)lifetime) == -1) {
         return tuna_translate_sys_error(errno);
     }
@@ -30,6 +34,8 @@ tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
 TUNA_PRIV_API
 tuna_error
 tuna_get_lifetime(tuna_ref const *ref, tuna_lifetime *lifetime_out);
+    assert(tuna_is_bound(ref));
+
     return tuna_get_raw_rtnl_link(ref->index,
                                   tuna_get_lifetime_callback, lifetime_out);
 }

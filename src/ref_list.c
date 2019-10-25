@@ -16,6 +16,8 @@ tuna_allocate_ref_list(size_t count, tuna_ref_list **list_out) {
         list->items[i] = NULL;
     }
 
+    *list_out = list;
+
     return 0;
 }
 

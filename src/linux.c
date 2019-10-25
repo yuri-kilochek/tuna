@@ -89,11 +89,10 @@ tuna_open_device_callback(struct nl_msg *nl_msg, void *context) {
 //    return err;
 //}
 
-static
+
+TUNA_PRIV_API
 tuna_error
-tuna_open_device(tuna_device const *attach_target, tuna_ownership ownership,
-                 tuna_device **device_out)
-{
+tuna_open(tuna_ref *ref) {
     struct nl_sock *nl_sock = NULL;
     tuna_device *device = NULL;
 
@@ -174,14 +173,18 @@ out:
     return err;
 }
 
-tuna_error
-tuna_create_device(tuna_ownership ownership, tuna_device **device_out) {
-    return tuna_open_device(NULL, ownership, device_out);
+TUNA_PRIV_API
+uint_fast8_t
+tuna_is_open(tuna_ref const *ref) {
+    return ref->fd != -1;
 }
 
-tuna_error
-tuna_attach_device(tuna_device const *target, tuna_device **device_out) {
-    return tuna_open_device(target, /*ignored*/0, device_out);
+TUNA_PRIV_API
+void
+tuna_close(tuna_ref *ref) {
+    if (ref->fd != -1) {
+        close(ref->fd); ref->fd = -1;
+    }
 }
 
 

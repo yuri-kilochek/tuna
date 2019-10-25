@@ -11,9 +11,9 @@ tuna_get_ref(tuna_ref **ref_out) {
     if (!(ref = malloc(sizeof(*ref)))) {
         return tuna_translate_sys_error(errno);
     }
-    *ref = (tuna_ref){
-        .fd = -1,
-    };
+    ref->index = 0;
+    ref->fd = -1;
+    ref->ownership = TUNA_EXCLUSIVE;
 
     *ref_out = ref;
 
@@ -32,9 +32,7 @@ tuna_free_ref(tuna_ref *ref) {
 TUNA_PRIV_API
 tuna_error
 tuna_bind_like(tuna_ref *ref, tuna_ref const *example_ref) {
-    tuna_unbind(ref);
-    ref->index = example_ref->index;
-    return 0;
+    return tuna_bind_by_index(ref, example_ref->index);
 }
 
 TUNA_PRIV_API
@@ -48,4 +46,5 @@ void
 tuna_unbind(tuna_ref *ref) {
     tuna_close(ref);
     ref->index = 0;
+    ref->ownership = TUNA_EXCLUSIVE;
 }
