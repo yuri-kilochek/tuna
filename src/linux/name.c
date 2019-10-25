@@ -101,6 +101,8 @@ tuna_free_name(char *name) {
 TUNA_PRIV_API
 tuna_error
 tuna_bind_by_name(tuna_ref *ref, char const *name) {
-    // TODO
+    // TODO: find index by name
+
+    return tuna_unchecked_bind_by_index(ref, index);
 }
 

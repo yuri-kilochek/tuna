@@ -3,6 +3,7 @@
 
 #include <tuna/priv/linux/error.h>
 #include <tuna/priv/linux/ref.h>
+#include <tuna/priv/linux/index.h>
 #include <tuna/priv/linux/netlink.h>
 #include <tuna/priv.h>
 
