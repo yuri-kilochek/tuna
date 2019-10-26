@@ -27,7 +27,7 @@ typedef uint_least32_t tuna_version;
     ((version) & UINT32_C(0x3FF)) \
 /**/
 
-#define TUNA_HEADER_VERSION \
+#define TUNA_INCLUDED_VERSION \
     TUNA_MAKE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION}) \
 /**/
 

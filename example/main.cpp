@@ -9,10 +9,10 @@
 #include <iomanip>
 
 int main() {
-    std::cout << "header version: "
-              << TUNA_GET_MAJOR_VERSION(TUNA_HEADER_VERSION) << "." 
-              << TUNA_GET_MINOR_VERSION(TUNA_HEADER_VERSION) << "." 
-              << TUNA_GET_PATCH_VERSION(TUNA_HEADER_VERSION) << "\n";
+    std::cout << "included version: "
+              << TUNA_GET_MAJOR_VERSION(TUNA_INCLUDED_VERSION) << "." 
+              << TUNA_GET_MINOR_VERSION(TUNA_INCLUDED_VERSION) << "." 
+              << TUNA_GET_PATCH_VERSION(TUNA_INCLUDED_VERSION) << "\n";
     {
         tuna_version v = tuna_get_linked_version();
         std::cout << "linked version: "
