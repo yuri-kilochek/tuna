@@ -32,10 +32,9 @@ add_custom_command(
     OUTPUT "${HEADER}"
 )
 target_sources(tuna PRIVATE "${HEADER}")
-target_include_directories(tuna
-    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
-    PRIVATE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>"
+target_include_directories(tuna PUBLIC
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
+    "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
 )
 
 target_sources(tuna PRIVATE
@@ -76,15 +75,17 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     target_link_libraries(tuna PRIVATE pathcch setupapi newdev)
 endif()
 
-target_include_directories(tuna
-    PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+target_include_directories(tuna PUBLIC
+    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
-install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+install(
+    DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/"
+              "${CMAKE_CURRENT_BINARY_DIR}/include/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    PATTERN "tuna/priv" EXCLUDE
+    PATTERN "tuna/priv/*" EXCLUDE
+    PATTERN "tuna/priv.h" EXCLUDE
     PATTERN "*.in" EXCLUDE
-)
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna/version.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/tuna"
 )
 install(TARGETS tuna EXPORT tuna
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
