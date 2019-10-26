@@ -1,4 +1,4 @@
-#include <tuna.h>
+#include <tuna/priv/linux.h>
 
 #include <string.h>
 #include <assert.h>

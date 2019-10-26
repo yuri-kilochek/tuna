@@ -1,16 +1,16 @@
 #include <tuna/priv/linux.h>
 
+#include <assert.h>
+
 #include <sys/ioctl.h>
 #include <linux/if.h>
 #include <linux/if_tun.h>
-
-#include <assert.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
 TUNA_PRIV_API
 tuna_error
-tuna_set_carrier_state(tuna_ref *ref, tuna_carrier_state state);
+tuna_set_carrier_state(tuna_ref *ref, tuna_carrier_state state) {
     assert(tuna_is_open(ref));
 
     if (ioctl(ref->fd, TUNSETCARRIER, &(unsigned int){state}) == -1) {
@@ -21,7 +21,7 @@ tuna_set_carrier_state(tuna_ref *ref, tuna_carrier_state state);
 
 TUNA_PRIV_API
 tuna_error
-tuna_get_carrier_state(tuna_ref const *ref, tuna_carrier_state *state_out);
+tuna_get_carrier_state(tuna_ref const *ref, tuna_carrier_state *state_out) {
     assert(tuna_is_bound(ref));
 
     struct rtnl_link *rtnl_link = NULL;

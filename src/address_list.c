@@ -8,7 +8,7 @@ int
 tuna_allocate_address_list(size_t count, tuna_address_list **list_out) {
     tuna_address_list *list;
     if (!(list = malloc(sizeof(*list) + count * sizeof(*list->items)))) {
-        return tuna_translate_sys_error(errno);
+        return TUNA_OUT_OF_MEMORY;
     }
 
     list->count = count;
