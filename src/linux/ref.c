@@ -31,7 +31,8 @@ tuna_free_ref(tuna_ref *ref) {
 TUNA_PRIV_API
 tuna_error
 tuna_bind_like(tuna_ref *ref, tuna_ref const *example_ref) {
-    return tuna_bind_by_index(ref, example_ref->index);
+    tuna_unchecked_bind_by_index(ref, example_ref->index);
+    return 0;
 }
 
 TUNA_PRIV_API
