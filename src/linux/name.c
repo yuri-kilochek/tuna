@@ -5,7 +5,6 @@
 #include <assert.h>
 
 #include <unistd.h>
-#include <net/if.h>
 #include <linux/if.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -58,10 +57,7 @@ out:
     if (tuna_change_rtnl_link_flags_via(nl_sock, ref->index,
                                         rtnl_link_set_flags,
                                         flags & IFF_UP, NULL))
-    {
-        close(ref->fd); ref->fd = -1;
-        err = TUNA_DEVICE_LOST;
-    }
+    { err = TUNA_DEVICE_LOST; }
 
     nl_socket_free(nl_sock);
 
@@ -103,6 +99,7 @@ tuna_error
 tuna_bind_by_name(tuna_ref *ref, char const *name) {
     // TODO: find index by name
 
-    return tuna_unchecked_bind_by_index(ref, index);
+    tuna_unchecked_bind_by_index(ref, index);
+    return 0;
 }
 

@@ -33,7 +33,7 @@ typedef uint_least32_t tuna_version;
 
 TUNA_PRIV_API
 tuna_version
-tuna_get_runtime_version(void);
+tuna_get_linked_version(void);
 
 ///////////////////////////////////////////////////////////////////////////////
 

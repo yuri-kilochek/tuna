@@ -14,10 +14,6 @@ typedef uint_least8_t tuna_ownership;
 #define TUNA_SHARED    UINT8_C(1)
 
 TUNA_PRIV_API
-void
-tuna_set_ownership(tuna_ref *ref, tuna_ownership ownership);
-
-TUNA_PRIV_API
 tuna_error
 tuna_get_ownership(tuna_ref const *ref, tuna_ownership *ownership_out);
 

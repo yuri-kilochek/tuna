@@ -7,7 +7,7 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 static
-tuna_error
+int
 tuna_address_to_local_nl_addr(int index, tuna_address address,
                               struct rtnl_addr **rtnl_addr_out)
 {

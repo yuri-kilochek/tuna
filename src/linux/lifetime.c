@@ -33,7 +33,7 @@ tuna_get_lifetime_callback(struct nl_msg *nl_msg, void *context) {
 
 TUNA_PRIV_API
 tuna_error
-tuna_get_lifetime(tuna_ref const *ref, tuna_lifetime *lifetime_out);
+tuna_get_lifetime(tuna_ref const *ref, tuna_lifetime *lifetime_out) {
     assert(tuna_is_bound(ref));
 
     return tuna_get_raw_rtnl_link(ref->index,

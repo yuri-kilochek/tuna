@@ -13,7 +13,7 @@
 #include <tuna/mtu.h>
 #include <tuna/address.h>
 #include <tuna/address_list.h>
-#include <tuna/connection.h>
+#include <tuna/carrier.h>
 #include <tuna/io_handle.h>
 
 #include <stdint.h>
@@ -22,7 +22,7 @@
 
 TUNA_PRIV_API
 tuna_error
-tuna_open(tuna_ref *ref);
+tuna_open(tuna_ref *ref, tuna_ownership ownership);
 
 TUNA_PRIV_API
 uint_fast8_t

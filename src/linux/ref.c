@@ -13,7 +13,6 @@ tuna_get_ref(tuna_ref **ref_out) {
     }
     ref->index = 0;
     ref->fd = -1;
-    ref->ownership = TUNA_EXCLUSIVE;
 
     *ref_out = ref;
 
@@ -46,5 +45,4 @@ void
 tuna_unbind(tuna_ref *ref) {
     tuna_close(ref);
     ref->index = 0;
-    ref->ownership = TUNA_EXCLUSIVE;
 }

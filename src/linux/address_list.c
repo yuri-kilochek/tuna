@@ -75,11 +75,11 @@ tuna_get_address_list(tuna_ref const *ref, tuna_address_list **list_out) {
     }
 
     size_t count = 0;
-    if ((err = tuna_rtnl_addr_cache_to_address_list(ref->index, nl_cache,
-                                                    &count, NULL))
-     || (tuna_allocate_address_list(count, &list), 0)
-     || (err = tuna_rtnl_addr_cache_to_address_list(ref->index, nl_cache,
-                                                    NULL, list->items)))
+    if ((tuna_rtnl_addr_cache_to_address_list(ref->index, nl_cache,
+                                              &count, NULL), 0)
+     || (err = tuna_allocate_address_list(count, &list))
+     || (tuna_rtnl_addr_cache_to_address_list(ref->index, nl_cache,
+                                              NULL, list->items), 0))
     { goto out; }
 
     *list_out = list; list = NULL;
