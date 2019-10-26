@@ -5,6 +5,7 @@
 #include <assert.h>
 
 #include <unistd.h>
+#include <net/if.h>
 #include <linux/if.h>
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -97,9 +98,16 @@ tuna_free_name(char *name) {
 TUNA_PRIV_API
 tuna_error
 tuna_bind_by_name(tuna_ref *ref, char const *name) {
-    // TODO: find index by name
+    unsigned index;
+    if (!(index = if_nametoindex(name))) {
+        if (errno == ENODEV) {
+            return TUNA_DEVICE_NOT_FOUND;
+        }
+        return tuna_translate_sys_error(errno);
+    }
 
     tuna_unchecked_bind_by_index(ref, index);
+
     return 0;
 }
 

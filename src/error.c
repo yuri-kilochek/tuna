@@ -14,16 +14,18 @@ tuna_get_error_name(tuna_error error) {
         return "unexpected";
     case TUNA_UNSUPPORTED:
         return "unsupported";
+    case TUNA_DEVICE_NOT_FOUND:
+        return "device not found";
     case TUNA_DEVICE_LOST:
         return "device lost";
+    case TUNA_DEVICE_BUSY:
+        return "device busy";
     case TUNA_FORBIDDEN:
         return "forbidden";
     case TUNA_OUT_OF_MEMORY:
         return "out of memory";
     case TUNA_TOO_MANY_HANDLES:
         return "too many handles";
-    case TUNA_DEVICE_BUSY:
-        return "device busy";
     case TUNA_NAME_TOO_LONG:
         return "name too long";
     case TUNA_DUPLICATE_NAME:
