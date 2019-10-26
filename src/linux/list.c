@@ -7,8 +7,8 @@
 
 static
 int
-tuna_rtnl_link_cache_to_ref_list(struct nl_cache *nl_cache,
-                                 size_t *count_out, tuna_ref **items)
+tuna_rtnl_link_cache_to_list(struct nl_cache *nl_cache,
+                             size_t *count_out, tuna_ref **items)
 {
     tuna_ref *ref = NULL;
 
@@ -50,10 +50,10 @@ out:
 
 TUNA_PRIV_API
 tuna_error
-tuna_get_ref_list(tuna_ref_list **list_out) {
+tuna_get_list(tuna_list **list_out) {
     struct nl_sock *nl_sock = NULL;
     struct nl_cache *nl_cache = NULL;
-    tuna_ref_list *list = NULL;
+    tuna_list *list = NULL;
 
     int err = 0;
 
@@ -67,15 +67,15 @@ tuna_get_ref_list(tuna_ref_list **list_out) {
     }
 
     size_t count = 0;
-    if ((err = tuna_rtnl_link_cache_to_ref_list(nl_cache, &count, NULL))
-     || (err = tuna_allocate_ref_list(count, &list))
-     || (err = tuna_rtnl_link_cache_to_ref_list(nl_cache, NULL, list->items)))
+    if ((err = tuna_rtnl_link_cache_to_list(nl_cache, &count, NULL))
+     || (err = tuna_allocate_list(count, &list))
+     || (err = tuna_rtnl_link_cache_to_list(nl_cache, NULL, list->items)))
     { goto out; }
 
     *list_out = list; list = NULL;
 
 out:
-    tuna_free_ref_list(list);
+    tuna_free_list(list);
     nl_cache_free(nl_cache);
     nl_socket_free(nl_sock);
 

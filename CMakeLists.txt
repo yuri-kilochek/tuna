@@ -41,12 +41,12 @@ target_include_directories(tuna
 target_sources(tuna PRIVATE
     src/version.c
     src/error.c
-    src/ref_list.c
+    src/list.c
     src/address_list.c
 
     $<$<PLATFORM_ID:Linux>:src/linux/error.c>
     $<$<PLATFORM_ID:Linux>:src/linux/ref.c>
-    $<$<PLATFORM_ID:Linux>:src/linux/ref_list.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/list.c>
     $<$<PLATFORM_ID:Linux>:src/linux/ownership.c>
     $<$<PLATFORM_ID:Linux>:src/linux/lifetime.c>
     $<$<PLATFORM_ID:Linux>:src/linux/index.c>

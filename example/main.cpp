@@ -108,17 +108,17 @@ int main() {
         return EXIT_FAILURE;
     }
 
-    tuna_ref_list *refs = NULL;
+    tuna_list *list = NULL;
     BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_free_ref_list(refs);
+        tuna_free_list(list);
     };
-    if (auto err = tuna_get_ref_list(&refs)) {
-        std::cerr << "tuna_get_ref_list failed: " << tuna_get_error_name(err) << "\n";
+    if (auto err = tuna_get_list(&list)) {
+        std::cerr << "tuna_get_list failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
     std::cout << "all devices:\n";
-    for (size_t i = 0; i < tuna_get_ref_count(refs); ++i) {
-        if (auto err = tuna_bind_like_at(ref, refs, i)) {
+    for (size_t i = 0; i < tuna_get_count(list); ++i) {
+        if (auto err = tuna_bind_at(ref, list, i)) {
             std::cerr << "tuna_bind_like_at failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
