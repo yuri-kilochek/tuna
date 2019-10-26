@@ -34,17 +34,30 @@ add_custom_command(
 target_sources(tuna PRIVATE "${HEADER}")
 target_include_directories(tuna
     PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>"
-    PRIVATE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
+    PUBLIC "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
     PRIVATE "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/src/include>"
 )
 
 target_sources(tuna PRIVATE
     src/version.c
     src/error.c
+    src/ref_list.c
+    src/address_list.c
 
     $<$<PLATFORM_ID:Linux>:src/linux/error.c>
-    $<$<PLATFORM_ID:Linux>:src/linux/index.c>
     $<$<PLATFORM_ID:Linux>:src/linux/ref.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/ref_list.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/ownership.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/lifetime.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/index.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/name.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/mtu.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/address.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/address_list.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/carrier_state.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/io_handle.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/netlink.c>
+    $<$<PLATFORM_ID:Linux>:src/linux.c>
 
     $<$<PLATFORM_ID:Windows>:src/windows.c>
 )
@@ -63,11 +76,15 @@ if("${CMAKE_SYSTEM_NAME}" STREQUAL Windows)
     target_link_libraries(tuna PRIVATE pathcch setupapi newdev)
 endif()
 
-target_include_directories(tuna PUBLIC
-    "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+target_include_directories(tuna
+    PUBLIC "$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
-install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna.h"
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/include/"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
+    PATTERN "*.in" EXCLUDE
+)
+install(FILES "${CMAKE_CURRENT_BINARY_DIR}/include/tuna/version.h"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/tuna"
 )
 install(TARGETS tuna EXPORT tuna
     ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
