@@ -77,10 +77,10 @@ get_index:
         goto out;
     }
 
-    // XXX: It is possible for `tuna_set_name` to fail in way that will leave
-    // the persistent interface with `IFF_UP` unset. The following is required to
-    // recover automatically, but will intefere with any external attempts to
-    // unset `IFF_UP`.
+    // XXX: It is possible for `tuna_set_name` to fail in way that leaves
+    // the persistent interface with `IFF_UP` unset. The following is required
+    // to recover automatically, but may interfere with any external attempts
+    // to unset `IFF_UP`.
     if ((err = tuna_change_rtnl_link_flags_via(nl_sock, ref->index,
                                                rtnl_link_set_flags,
                                                IFF_UP, NULL)))
