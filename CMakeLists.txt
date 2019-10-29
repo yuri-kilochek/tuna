@@ -53,7 +53,7 @@ target_sources(tuna PRIVATE
     $<$<PLATFORM_ID:Linux>:src/linux/mtu.c>
     $<$<PLATFORM_ID:Linux>:src/linux/address.c>
     $<$<PLATFORM_ID:Linux>:src/linux/address_list.c>
-    $<$<PLATFORM_ID:Linux>:src/linux/carrier_state.c>
+    $<$<PLATFORM_ID:Linux>:src/linux/carrier_status.c>
     $<$<PLATFORM_ID:Linux>:src/linux/io_handle.c>
     $<$<PLATFORM_ID:Linux>:src/linux/netlink.c>
     $<$<PLATFORM_ID:Linux>:src/linux.c>

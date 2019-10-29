@@ -9,10 +9,10 @@
 
 TUNA_PRIV_API
 tuna_error
-tuna_set_carrier_state(tuna_ref *ref, tuna_carrier_state state) {
+tuna_set_carrier_status(tuna_ref *ref, tuna_carrier_status status) {
     assert(tuna_is_open(ref));
 
-    if (ioctl(ref->fd, TUNSETCARRIER, &(unsigned int){state}) == -1) {
+    if (ioctl(ref->fd, TUNSETCARRIER, &(unsigned int){status}) == -1) {
         return tuna_translate_sys_error(errno);
     }
     return 0;
@@ -20,7 +20,7 @@ tuna_set_carrier_state(tuna_ref *ref, tuna_carrier_state state) {
 
 TUNA_PRIV_API
 tuna_error
-tuna_get_carrier_state(tuna_ref const *ref, tuna_carrier_state *state_out) {
+tuna_get_carrier_status(tuna_ref const *ref, tuna_carrier_status *status_out) {
     assert(tuna_is_bound(ref));
 
     struct rtnl_link *rtnl_link = NULL;
@@ -31,7 +31,7 @@ tuna_get_carrier_state(tuna_ref const *ref, tuna_carrier_state *state_out) {
         goto out;
     }
 
-    *state_out = rtnl_link_get_carrier(rtnl_link);
+    *status_out = rtnl_link_get_carrier(rtnl_link);
 
 out:
     rtnl_link_put(rtnl_link);

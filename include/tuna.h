@@ -13,7 +13,7 @@
 #include <tuna/mtu.h>
 #include <tuna/address.h>
 #include <tuna/address_list.h>
-#include <tuna/carrier_state.h>
+#include <tuna/carrier_status.h>
 #include <tuna/io_handle.h>
 
 #include <stdint.h>
