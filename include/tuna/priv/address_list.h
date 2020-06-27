@@ -1,9 +1,11 @@
-#ifndef TUNA_PRIV_INCLUDE_GUARD_PRIV_ADDRESS_LIST
-#define TUNA_PRIV_INCLUDE_GUARD_PRIV_ADDRESS_LIST
-
-#include <tuna.h>
+#ifndef TUNA_IMPL_INCL_PRIV_ADDRESS_LIST_H
+#define TUNA_IMPL_INCL_PRIV_ADDRESS_LIST_H
 
 #include <stddef.h>
+
+#include <tuna/address_list.h>
+#include <tuna/address.h>
+#include <tuna/error.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -12,9 +14,10 @@ struct tuna_address_list {
     tuna_address items[];
 };
 
-int
+tuna_error
 tuna_allocate_address_list(size_t count, tuna_address_list **list_out);
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif
+

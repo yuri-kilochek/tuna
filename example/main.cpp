@@ -10,15 +10,15 @@
 
 int main() {
     std::cout << "included version: "
-              << TUNA_GET_MAJOR_VERSION(TUNA_INCLUDED_VERSION) << "." 
-              << TUNA_GET_MINOR_VERSION(TUNA_INCLUDED_VERSION) << "." 
-              << TUNA_GET_PATCH_VERSION(TUNA_INCLUDED_VERSION) << "\n";
+              << (TUNA_INCLUDED_VERSION / 1'000'000u % 1'000u) << "." 
+              << (TUNA_INCLUDED_VERSION /     1'000u % 1'000u) << "." 
+              << (TUNA_INCLUDED_VERSION /         1u % 1'000u) << "\n";
     {
         tuna_version v = tuna_get_linked_version();
         std::cout << "linked version: "
-                  << TUNA_GET_MAJOR_VERSION(v) << "." 
-                  << TUNA_GET_MINOR_VERSION(v) << "." 
-                  << TUNA_GET_PATCH_VERSION(v) << "\n";
+                  << (v / 1'000'000u % 1'000u) << "." 
+                  << (v /     1'000u % 1'000u) << "." 
+                  << (v /         1u % 1'000u) << "\n";
     }
 
     //tuna_device *device_a;
@@ -103,56 +103,104 @@ int main() {
     BOOST_SCOPE_EXIT_ALL(&) {
         tuna_free_ref(ref);
     };
-    if (auto err = tuna_get_ref(&ref)) {
-        std::cerr << "tuna_get_ref failed: " << tuna_get_error_name(err) << "\n";
+    if (auto err = tuna_allocate_ref(&ref)) {
+        std::cerr << "tuna_allocate_ref failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
 
-    tuna_list *list = NULL;
+    tuna_ref_list *list = NULL;
     BOOST_SCOPE_EXIT_ALL(&) {
-        tuna_free_list(list);
+        tuna_free_ref_list(list);
     };
-    if (auto err = tuna_get_list(&list)) {
-        std::cerr << "tuna_get_list failed: " << tuna_get_error_name(err) << "\n";
+    if (auto err = tuna_get_refs(&list)) {
+        std::cerr << "tuna_get_refs failed: " << tuna_get_error_name(err) << "\n";
         return EXIT_FAILURE;
     }
     std::cout << "all devices:\n";
-    for (size_t i = 0; i < tuna_get_count(list); ++i) {
-        if (auto err = tuna_bind_at(ref, list, i)) {
-            std::cerr << "tuna_bind_like_at failed: " << tuna_get_error_name(err) << "\n";
+    for (size_t i = 0; i < tuna_get_ref_count(list); ++i) {
+        if (auto err = tuna_bind_like(ref, tuna_get_ref_at(list, i))) {
+            std::cerr << "tuna_bind_like failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
 
+        tuna_index index;
+        if (auto err = tuna_get_index(ref, &index)) {
+            std::cerr << "tuna_get_index failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
         char *name;
         if (auto err = tuna_get_name(ref, &name)) {
             std::cerr << "tuna_get_name failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
         BOOST_SCOPE_EXIT_ALL(&) {
-            tuna_free_name(name);
+            tuna_free_string(name);
         };
-        std::cout << "  " << tuna_get_index(ref) << ": " << name << "\n";
+        std::cout << "  " << index << ": " << name << "\n";
 
         tuna_ownership ownership;
         if (auto err = tuna_get_ownership(ref, &ownership)) {
             std::cerr << "tuna_get_ownership failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
-        std::cout << "    ownership: " << (ownership ? "shared" : "exclusive") << "\n";
+        std::cout << "    ownership: " << [&]{
+            switch (ownership) {
+            case TUNA_OWNERSHIP_EXCLUSIVE:
+                return "exclusive";
+            case TUNA_OWNERSHIP_SHARED:
+                return "shared";
+            default:
+                return "unknown";
+            }
+        }() << "\n";
 
         tuna_lifetime lifetime;
         if (auto err = tuna_get_lifetime(ref, &lifetime)) {
             std::cerr << "tuna_get_lifetime failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
-        std::cout << "    lifetime: " << (lifetime ? "persistent" : "transient") << "\n";
+        std::cout << "    lifetime: " << [&]{
+            switch (lifetime) {
+            case TUNA_LIFETIME_PERSISTENT:
+                return "persistent";
+            case TUNA_LIFETIME_TRANSIENT:
+                return "transient";
+            default:
+                return "unknown";
+            }
+        }() << "\n";
 
-        tuna_carrier_state carrier_state;
-        if (auto err = tuna_get_carrier_state(ref, &carrier_state)) {
-            std::cerr << "tuna_get_carrier_state failed: " << tuna_get_error_name(err) << "\n";
+        tuna_admin_state admin_state;
+        if (auto err = tuna_get_admin_state(ref, &admin_state)) {
+            std::cerr << "tuna_get_admin_state failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
-        std::cout << "    carrier_state: " << (carrier_state ? "connected" : "disconnected") << "\n";
+        std::cout << "    admin state: " << [&]{
+            switch (admin_state) {
+            case TUNA_ADMIN_STATE_ENABLED:
+                return "enabled";
+            case TUNA_ADMIN_STATE_DISABLED:
+                return "disabled";
+            default:
+                return "unknown";
+            }
+        }() << "\n";
+
+        tuna_link_state link_state;
+        if (auto err = tuna_get_link_state(ref, &link_state)) {
+            std::cerr << "tuna_get_link_state failed: " << tuna_get_error_name(err) << "\n";
+            return EXIT_FAILURE;
+        }
+        std::cout << "    link state: " << [&]{
+            switch (link_state) {
+            case TUNA_LINK_STATE_DISCONNECTED:
+                return "disconnected";
+            case TUNA_LINK_STATE_CONNECTED:
+                return "connected";
+            default:
+                return "unknown";
+            }
+        }() << "\n";
 
         size_t mtu;
         if (auto err = tuna_get_mtu(ref, &mtu)) {
@@ -162,8 +210,8 @@ int main() {
         std::cout << "    mtu: " << mtu << "\n";
 
         tuna_address_list *addresses;
-        if (auto err = tuna_get_address_list(ref, &addresses)) {
-            std::cerr << "tuna_get_address_list failed: " << tuna_get_error_name(err) << "\n";
+        if (auto err = tuna_get_addresses(ref, &addresses)) {
+            std::cerr << "tuna_get_addresses failed: " << tuna_get_error_name(err) << "\n";
             return EXIT_FAILURE;
         }
         BOOST_SCOPE_EXIT_ALL(&) {
@@ -172,10 +220,10 @@ int main() {
         std::cout << "    addresses:\n";
         for (size_t j = 0; j < tuna_get_address_count(addresses); ++j) {
             auto address = tuna_get_address_at(addresses, j);
-            switch (address.family) {
-            case TUNA_IP4:
+            switch (address->family) {
+            case TUNA_ADDRESS_FAMILY_IP4:
                 {
-                    auto& ip4 = address.ip4;
+                    auto& ip4 = address->ip4;
                     std::cout << "        ip4 "
                               << (int)ip4.bytes[0] << "."
                               << (int)ip4.bytes[1] << "."
@@ -184,9 +232,9 @@ int main() {
                               << (int)ip4.prefix_length << "\n";
                 }
                 break;
-            case TUNA_IP6:
+            case TUNA_ADDRESS_FAMILY_IP6:
                 {
-                    auto& ip6 = address.ip6;
+                    auto& ip6 = address->ip6;
                     std::cout << "        ip6 "
                           << std::hex
                           << (int)ip6.bytes[ 0] << (int)ip6.bytes[ 1] << ":"

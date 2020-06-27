@@ -1,17 +1,15 @@
-#ifndef TUNA_PRIV_INCLUDE_GUARD_ADDRESS
-#define TUNA_PRIV_INCLUDE_GUARD_ADDRESS
-
-#include <tuna/api.h>
-#include <tuna/error.h>
-#include <tuna/ref.h>
+#ifndef TUNA_IMPL_INCL_ADDRESS_H
+#define TUNA_IMPL_INCL_ADDRESS_H
 
 #include <stdint.h>
 
+#include <tuna/impl/prolog.inc>
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef uint_least8_t tuna_address_family;
-#define TUNA_IP4 UINT8_C(1)
-#define TUNA_IP6 UINT8_C(2)
+
+#define TUNA_ADDRESS_FAMILY_IP4 UINT8_C(1)
+#define TUNA_ADDRESS_FAMILY_IP6 UINT8_C(2)
 
 typedef struct tuna_ip4_address {
     tuna_address_family family;
@@ -31,14 +29,8 @@ typedef union tuna_address {
     tuna_ip6_address ip6;
 } tuna_address;
 
-TUNA_PRIV_API
-tuna_error
-tuna_add_address(tuna_ref *ref, tuna_address address);
-
-TUNA_PRIV_API
-tuna_error
-tuna_remove_address(tuna_ref *ref, tuna_address address);
-
 ///////////////////////////////////////////////////////////////////////////////
+#include <tuna/impl/epilog.inc>
 
 #endif
+

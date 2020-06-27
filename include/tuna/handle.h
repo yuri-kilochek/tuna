@@ -1,5 +1,5 @@
-#ifndef TUNA_IMPL_INCL_INDEX_H
-#define TUNA_IMPL_INCL_INDEX_H
+#ifndef TUNA_IMPL_INCL_HANDLE_H
+#define TUNA_IMPL_INCL_HANDLE_H
 
 #include <tuna/impl/os.h>
 
@@ -7,9 +7,9 @@
 ///////////////////////////////////////////////////////////////////////////////
 
 #if TUNA_IMPL_OS_WINDOWS
-    typedef unsigned long tuna_index; // aka NET_IFINDEX
+    typedef void *tuna_handle; // aka HANDLE
 #else
-    typedef unsigned int tuna_index;
+    typedef int tuna_handle;
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////

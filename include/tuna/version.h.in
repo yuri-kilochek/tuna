@@ -1,40 +1,24 @@
-#ifndef TUNA_PRIV_INCLUDE_GUARD_VERSION
-#define TUNA_PRIV_INCLUDE_GUARD_VERSION
-
-#include <tuna/api.h>
+#ifndef TUNA_IMPL_INCL_VERSION_H
+#define TUNA_IMPL_INCL_VERSION_H
 
 #include <stdint.h>
 
+#include <tuna/impl/prolog.inc>
 ///////////////////////////////////////////////////////////////////////////////
 
 typedef uint_least32_t tuna_version;
 
-#define TUNA_MAKE_VERSION(major, minor, patch) \
-    (((major) & UINT32_C(0xFFF)) << UINT32_C(20) | \
-     ((minor) & UINT32_C(0x3FF)) << UINT32_C(10) | \
-     ((patch) & UINT32_C(0x3FF))) \
-/**/
-
-#define TUNA_GET_MAJOR_VERSION(version) \
-    (((version) >> UINT32_C(20)) & UINT32_C(0xFFF)) \
-/**/
-
-#define TUNA_GET_MINOR_VERSION(version) \
-    (((version) >> UINT32_C(10)) & UINT32_C(0x3FF)) \
-/**/
-
-#define TUNA_GET_PATCH_VERSION(version) \
-    ((version) & UINT32_C(0x3FF)) \
-/**/
-
 #define TUNA_INCLUDED_VERSION \
-    TUNA_MAKE_VERSION(${MAJOR_VERSION}, ${MINOR_VERSION}, ${PATCH_VERSION}) \
-/**/
+    (UINT32_C(1000000) * ${VERSION_MAJOR} + \
+     UINT32_C(   1000) * ${VERSION_MINOR} + \
+     UINT32_C(      1) * ${VERSION_PATCH})
 
-TUNA_PRIV_API
+TUNA_IMPL_API
 tuna_version
 tuna_get_linked_version(void);
 
 ///////////////////////////////////////////////////////////////////////////////
+#include <tuna/impl/epilog.inc>
 
 #endif
+

@@ -1,180 +1,100 @@
-#include <tuna/priv/linux.h>
+#include <tuna/priv/linux/netlink.h>
+
+#include <netlink/route/link.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int
-tuna_translate_nl_error(int err) {
+tuna_error
+tuna_translate_nlerr(int err) {
     switch (err) {
     case 0:
         return 0;
+    case -NLE_NODEV:
+    case -NLE_OBJ_NOTFOUND:
+        return TUNA_ERROR_INTERFACE_LOST;
+    case -NLE_BUSY:
+        return TUNA_ERROR_INTERFACE_BUSY;
+    case -NLE_PERM:
+    case -NLE_NOACCESS:
+        return TUNA_ERROR_FORBIDDEN;
+    case -NLE_NOMEM:
+        return TUNA_ERROR_OUT_OF_MEMORY;
     default:
-        return TUNA_UNEXPECTED;
-    case NLE_NODEV:
-    case NLE_OBJ_NOTFOUND:
-        return TUNA_DEVICE_LOST;
-    case NLE_PERM:
-    case NLE_NOACCESS:
-        return TUNA_FORBIDDEN;
-    case NLE_NOMEM:
-        return TUNA_OUT_OF_MEMORY;
-    case NLE_BUSY:
-        return TUNA_DEVICE_BUSY;
+        return TUNA_IMPL_ERROR_UNKNOWN;
     }
 }
 
 int
-tuna_open_nl_sock(struct nl_sock **nl_sock_out) {
-    struct nl_sock *nl_sock = NULL;
+tuna_rtnl_socket_open(struct nl_sock **sock_out) {
+    struct nl_sock *sock = NULL;
 
     int err = 0;
 
-    if (!(nl_sock = nl_socket_alloc())) {
-        err = TUNA_OUT_OF_MEMORY;
+    if (!(sock = nl_socket_alloc())) {
+        err = -NLE_NOMEM;
+        goto out;
+    }
+    if (0 > (err = nl_connect(sock, NETLINK_ROUTE))) {
         goto out;
     }
 
-    if ((err = nl_connect(nl_sock, NETLINK_ROUTE))) {
-        err = tuna_translate_nl_error(-err);
-        goto out;
-    }
-
-    *nl_sock_out = nl_sock; nl_sock = NULL;
-
+    *sock_out = sock; sock = NULL;
 out:
-    nl_socket_free(nl_sock);
+    nl_socket_free(sock);
 
     return err;
 }
 
+
+static
 int
-tuna_get_raw_rtnl_link_via(struct nl_sock *nl_sock, int index,
-                           nl_recvmsg_msg_cb_t callback, void *context)
-{
-    struct nl_cb *nl_cb = NULL;
-    struct nl_msg *nl_msg = NULL;
+tuna_rtnl_link_get_raw_cb(struct nl_msg *msg, void *ctx) {
+    struct nl_msg **msg_out = ctx;
 
-    int err = 0;
+    nlmsg_get((*msg_out = msg));
 
-    if (!(nl_cb = nl_cb_alloc(NL_CB_CUSTOM))) {
-        err = TUNA_OUT_OF_MEMORY;
-        goto out;
-    }
-
-    if ((err = nl_cb_set(nl_cb, NL_CB_VALID, NL_CB_CUSTOM, callback, context))
-     || (err = rtnl_link_build_get_request(index, NULL, &nl_msg))
-     || (err = nl_send_auto(nl_sock, nl_msg)) < 0
-     || (err = nl_recvmsgs(nl_sock, nl_cb)))
-    {
-        err = tuna_translate_nl_error(-err);
-        goto out;
-    }
-
-out:
-    nlmsg_free(nl_msg);
-    nl_cb_put(nl_cb);
-
-    return err;
+    return NL_STOP;
 }
 
 int
-tuna_get_raw_rtnl_link(int index,
-                       nl_recvmsg_msg_cb_t callback, void *context)
+tuna_rtnl_link_get_raw(struct nl_sock *sock, int index,
+                       struct nl_msg **msg_out)
 {
-    struct nl_sock *nl_sock = NULL;
+    struct nl_cb *cb = NULL;
+    struct nl_msg *msg = NULL;
 
     int err = 0;
 
-    if ((err = tuna_open_nl_sock(&nl_sock)) ||
-        (err = tuna_get_raw_rtnl_link_via(nl_sock, index, callback, context)))
+    if (0 > (err = rtnl_link_build_get_request(index, NULL, &msg))
+     || 0 > (err = nl_send_auto(sock, msg)))
     { goto out; }
 
+    nlmsg_free(msg); msg = NULL;
+
+    if (!(cb = nl_cb_alloc(NL_CB_CUSTOM))) {
+        err = -NLE_NOMEM;
+        goto out;
+    }
+    if (0 > (err = nl_cb_set(cb, NL_CB_VALID, NL_CB_CUSTOM,
+                             tuna_rtnl_link_get_raw_cb, &msg))
+     || 0 > (err = nl_recvmsgs(sock, cb)))
+    { goto out; }
+
+    *msg_out = msg; msg = NULL;
 out:
-    nl_socket_free(nl_sock);
+    nlmsg_free(msg);
+    nl_cb_put(cb);
 
     return err;
 }
 
 struct nlattr *
-tuna_find_ifinfo_nlattr(struct nl_msg *nl_msg, int type) {
-    return nlmsg_find_attr(nlmsg_hdr(nl_msg), sizeof(struct ifinfomsg), type);
+tuna_nlmsg_find_ifinfo_attr(struct nl_msg *msg, int type) {
+    return nlmsg_find_attr(nlmsg_hdr(msg), sizeof(struct ifinfomsg), type);
 }
 
 struct nlattr *
-tuna_nested_find_nlattr(struct nlattr *nlattr, int type) {
-    return nla_find(nla_data(nlattr), nla_len(nlattr), type);
+tuna_nla_find_nested(struct nlattr *attr, int type) {
+    return nla_find(nla_data(attr), nla_len(attr), type);
 }
 
-int
-tuna_get_rtnl_link_via(struct nl_sock *nl_sock, int index,
-                       struct rtnl_link **rtnl_link_out)
-{
-    int err = rtnl_link_get_kernel(nl_sock, index, NULL, rtnl_link_out);
-    if (err) { return tuna_translate_nl_error(-err); }
-    return 0;
-}
-
-int
-tuna_get_rtnl_link(int index, struct rtnl_link **rtnl_link_out) {
-    struct nl_sock *nl_sock = NULL;
-    struct rtnl_link *rtnl_link = NULL;
-
-    int err = 0;
-
-    if ((err = tuna_open_nl_sock(&nl_sock))
-     || (err = tuna_get_rtnl_link_via(nl_sock, index, &rtnl_link)))
-    { goto out; }
-
-    *rtnl_link_out = rtnl_link; rtnl_link = NULL;
-
-out:
-    rtnl_link_put(rtnl_link);
-    nl_socket_free(nl_sock);
-
-    return err;
-}
-
-int
-tuna_allocate_rtnl_link(struct rtnl_link **rtnl_link_out) {
-    struct rtnl_link *rtnl_link = rtnl_link_alloc();
-    if (!rtnl_link) { return TUNA_OUT_OF_MEMORY; }
-    *rtnl_link_out = rtnl_link;
-    return 0;
-}
-
-int
-tuna_change_rtnl_link_via(struct nl_sock *nl_sock,
-                          struct rtnl_link *rtnl_link,
-                          struct rtnl_link *rtnl_link_changes)
-{
-    int err = rtnl_link_change(nl_sock, rtnl_link, rtnl_link_changes, 0);
-    if (err) { return tuna_translate_nl_error(-err); }
-    return 0;
-}
-
-int
-tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index,
-                                void (*change)(struct rtnl_link *, unsigned),
-                                unsigned flags, unsigned *old_flags_out)
-{
-    struct rtnl_link *rtnl_link = NULL;
-    struct rtnl_link *rtnl_link_changes = NULL;
-
-    int err = 0;
-
-    if ((err = tuna_get_rtnl_link_via(nl_sock, index, &rtnl_link))
-     || (err = tuna_allocate_rtnl_link(&rtnl_link_changes))
-     || (change(rtnl_link_changes, flags), 0)
-     || (err = tuna_change_rtnl_link_via(nl_sock,
-                                         rtnl_link, rtnl_link_changes)))
-    { goto out; }
-
-    if (old_flags_out) {
-        *old_flags_out = rtnl_link_get_flags(rtnl_link);
-    }
-
-out:
-    rtnl_link_put(rtnl_link_changes);
-    rtnl_link_put(rtnl_link);
-
-    return err;
-}

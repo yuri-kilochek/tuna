@@ -1,12 +1,14 @@
-#ifndef TUNA_IMPL_INCL_PRIV_LINUX_ERROR_H
-#define TUNA_IMPL_INCL_PRIV_LINUX_ERROR_H
+#ifndef TUNA_IMPL_INCL_PRIV_STRING_H
+#define TUNA_IMPL_INCL_PRIV_STRING_H
+
+#include <stddef.h>
 
 #include <tuna/error.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
-tuna_error 
-tuna_translate_errno(void);
+tuna_error
+tuna_allocate_string(size_t length, char **string_out);
 
 ///////////////////////////////////////////////////////////////////////////////
 

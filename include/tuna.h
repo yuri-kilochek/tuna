@@ -1,37 +1,20 @@
-#ifndef TUNA_PRIV_INCLUDE_GUARD
-#define TUNA_PRIV_INCLUDE_GUARD
+#ifndef TUNA_IMPL_INCL_H
+#define TUNA_IMPL_INCL_H
 
 #include <tuna/version.h>
-#include <tuna/api.h>
 #include <tuna/error.h>
-#include <tuna/ref.h>
-#include <tuna/list.h>
+#include <tuna/bool.h>
+#include <tuna/string.h>
+#include <tuna/index.h>
 #include <tuna/ownership.h>
 #include <tuna/lifetime.h>
-#include <tuna/index.h>
-#include <tuna/name.h>
-#include <tuna/mtu.h>
 #include <tuna/address.h>
 #include <tuna/address_list.h>
-#include <tuna/carrier_status.h>
-#include <tuna/io_handle.h>
-
-#include <stdint.h>
-
-///////////////////////////////////////////////////////////////////////////////
-
-TUNA_PRIV_API
-tuna_error
-tuna_open(tuna_ref *ref, tuna_ownership ownership);
-
-TUNA_PRIV_API
-uint_fast8_t
-tuna_is_open(tuna_ref const *ref);
-
-TUNA_PRIV_API
-void
-tuna_close(tuna_ref *ref);
-
-///////////////////////////////////////////////////////////////////////////////
+#include <tuna/admin_state.h>
+#include <tuna/link_state.h>
+#include <tuna/handle.h>
+#include <tuna/ref.h>
+#include <tuna/ref_list.h>
 
 #endif
+

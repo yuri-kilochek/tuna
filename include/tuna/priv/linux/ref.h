@@ -1,15 +1,14 @@
-#ifndef TUNA_PRIV_INCLUDE_GUARD_PRIV_LINUX_REF
-#define TUNA_PRIV_INCLUDE_GUARD_PRIV_LINUX_REF
+#ifndef TUNA_IMPL_INCL_PRIV_LINUX_REF_H
+#define TUNA_IMPL_INCL_PRIV_LINUX_REF_H
 
-#include <tuna/priv.h>
+#include <tuna/ref.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
-struct tuna_ref {
-    unsigned index;
-    int fd;
-};
+void
+tuna_unchecked_bind_by_index(tuna_ref *ref, unsigned int index);
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif
+

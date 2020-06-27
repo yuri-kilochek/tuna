@@ -1,27 +1,30 @@
-#include <tuna/priv/linux.h>
+#include <tuna/priv/linux/error.h>
+
+#include <errno.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int
-tuna_translate_sys_error(int errnum) {
-    switch (errnum) {
+tuna_error
+tuna_translate_errno(void) {
+    switch (errno) {
     case 0:
         return 0;
-    default:
-        return TUNA_UNEXPECTED;
     case ENXIO:
     case ENODEV:
-        return TUNA_DEVICE_LOST;
+        return TUNA_ERROR_INTERFACE_LOST;
+    case EBUSY:
+        return TUNA_ERROR_INTERFACE_BUSY;
     case EPERM:
     case EACCES:
-        return TUNA_FORBIDDEN;
+        return TUNA_ERROR_FORBIDDEN;
     case ENOMEM:
     case ENOBUFS:
-        return TUNA_OUT_OF_MEMORY;
+        return TUNA_ERROR_OUT_OF_MEMORY;
     case EMFILE:
     case ENFILE:
-        return TUNA_TOO_MANY_HANDLES;
-    case EBUSY:
-        return TUNA_DEVICE_BUSY;
+        return TUNA_ERROR_TOO_MANY_HANDLES;
+    default:
+        return TUNA_IMPL_ERROR_UNKNOWN;
     }
 }
+

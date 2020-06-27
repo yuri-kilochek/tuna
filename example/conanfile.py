@@ -8,7 +8,7 @@ class ExampleConan(ConanFile):
         'cmake_paths',
     )
     requires = (
-        ('boost/1.70.0@conan/stable'),        
+        ('boost/1.73.0'),        
     )
     short_paths = True
     no_copy_source = True

@@ -54,7 +54,7 @@ class TunaConan(ConanFile):
     def package_info(self):
         self.cpp_info.libs = tools.collect_libs(self)
         if self.options.shared:
-            self.cpp_info.defines.append('TUNA_IMPORT')
+            self.cpp_info.defines.append('TUNA_USE_DYNAMIC=1')
 
         if self.settings.os == 'Windows' and not self.options.shared:
             self.cpp_info.libs.extend(['pathcch', 'setupapi', 'newdev'])

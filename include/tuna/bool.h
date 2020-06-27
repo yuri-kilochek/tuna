@@ -1,16 +1,12 @@
-#ifndef TUNA_IMPL_INCL_INDEX_H
-#define TUNA_IMPL_INCL_INDEX_H
+#ifndef TUNA_IMPL_INCL_BOOL_H
+#define TUNA_IMPL_INCL_BOOL_H
 
-#include <tuna/impl/os.h>
+#include <stdint.h>
 
 #include <tuna/impl/prolog.inc>
 ///////////////////////////////////////////////////////////////////////////////
 
-#if TUNA_IMPL_OS_WINDOWS
-    typedef unsigned long tuna_index; // aka NET_IFINDEX
-#else
-    typedef unsigned int tuna_index;
-#endif
+typedef uint_least8_t tuna_bool;
 
 ///////////////////////////////////////////////////////////////////////////////
 #include <tuna/impl/epilog.inc>

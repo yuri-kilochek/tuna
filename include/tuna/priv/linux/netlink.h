@@ -1,53 +1,29 @@
-#ifndef TUNA_PRIV_INCLUDE_GUARD_PRIV_LINUX_NETLINK
-#define TUNA_PRIV_INCLUDE_GUARD_PRIV_LINUX_NETLINK
+#ifndef TUNA_IMPL_INCL_PRIV_LINUX_NETLINK_H
+#define TUNA_IMPL_INCL_PRIV_LINUX_NETLINK_H
 
-#include <tuna/priv.h>
+#include <tuna/error.h>
 
 #include <netlink/netlink.h>
-#include <netlink/route/link.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 
-int
-tuna_translate_nl_error(int err);
+tuna_error
+tuna_translate_nlerr(int err);
 
 int
-tuna_open_nl_sock(struct nl_sock **nl_sock_out);
+tuna_rtnl_socket_open(struct nl_sock **sock_out);
 
 int
-tuna_get_raw_rtnl_link_via(struct nl_sock *nl_sock, int index,
-                           nl_recvmsg_msg_cb_t callback, void *context);
-
-int
-tuna_get_raw_rtnl_link(int index,
-                       nl_recvmsg_msg_cb_t callback, void *context);
+tuna_rtnl_link_get_raw(struct nl_sock *sock, int index,
+                       struct nl_msg **msg_out);
 
 struct nlattr *
-tuna_find_ifinfo_nlattr(struct nl_msg *nl_msg, int type);
+tuna_nlmsg_find_ifinfo_attr(struct nl_msg *msg, int type);
 
 struct nlattr *
-tuna_nested_find_nlattr(struct nlattr *nlattr, int type);
-
-int
-tuna_get_rtnl_link_via(struct nl_sock *nl_sock, int index,
-                       struct rtnl_link **rtnl_link_out);
-
-int
-tuna_get_rtnl_link(int index, struct rtnl_link **rtnl_link_out);
-
-int
-tuna_allocate_rtnl_link(struct rtnl_link **rtnl_link_out);
-
-int
-tuna_change_rtnl_link_via(struct nl_sock *nl_sock,
-                          struct rtnl_link *rtnl_link,
-                          struct rtnl_link *rtnl_link_changes);
-
-int
-tuna_change_rtnl_link_flags_via(struct nl_sock *nl_sock, int index,
-                                void (*change)(struct rtnl_link *, unsigned),
-                                unsigned flags, unsigned *old_flags_out);
+tuna_nla_find_nested(struct nlattr *attr, int type);
 
 ///////////////////////////////////////////////////////////////////////////////
 
 #endif
+
